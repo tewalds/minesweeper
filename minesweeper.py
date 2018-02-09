@@ -25,21 +25,29 @@ NEIGHBORS = np.array([
     [ 1, -1], [ 1, 0], [ 1, 1],
 ])
 
-COLORS = (np.array([
-    [0.5, 0.5, 0.5],  # 0: grey
-    [0, 0, 1],        # 1: blue
-    [0, 0.8, 0],      # 2: green
-    [0.8, 0, 0],      # 3: red
-    [0.5, 0, 0.5],    # 4: purple
-    [0.6, 0.3, 0],    # 5: brown
-    [0, 1, 1],        # 6: cyan
-    [0.2, 0.2, 0.2],  # 7: dark grey
-    [0, 0, 0],        # 8: black
-    [1, 1, 1],        # Bomb: white
-    [0.8, 0.8, 0.8],  # Hidden: light grey
-    # [1, 0.4, 0.75],   # Mark: pink
-    [0, 0, 0],        # Mark: black?
-]) * 255).astype(np.uint8)
+
+def grey(g):
+  return pygame.Color(g, g, g)
+
+def hsla(h, s, l, a=100):
+  c = pygame.Color(0)
+  c.hsla = h, s, l, a
+  return c
+
+COLORS = np.array([
+    grey(127),           # 0: grey
+    hsla(240, 100, 60),  # 1: blue
+    hsla(120, 100, 60),  # 2: green
+    hsla(0,  100, 60),   # 3: red
+    hsla(300, 100, 30),  # 4: purple
+    hsla(180, 100, 40),  # 5: cyan
+    hsla(60, 100, 50),   # 6: yellow
+    grey(95),            # 7: dark grey
+    grey(64),            # 8: darker grey
+    grey(255),           # Bomb: white
+    grey(215),           # Hidden: light grey
+    grey(0),             # Mark: black
+])[:, :3].astype(np.uint8)
 
 
 class Cell(enum.IntEnum):
@@ -77,11 +85,9 @@ class Env(object):
       np.random.shuffle(state)
       bombs = state < num * self._fraction
       bombs = bombs.reshape(self._size)
-      # print(bombs)
-      self._bombs = counts(bombs)
-      # print(state)
-      y, x = (self._bombs == 0).nonzero()
-      zeros = np.array(zip(y, x))
+      self._counts = convolve(bombs)
+      self._counts[bombs] = Cell.BOMB
+      zeros = list(zip(*((self._counts == 0).nonzero())))
       if len(zeros) == 0:
         continue
       y, x = zeros[np.random.randint(len(zeros))]
@@ -99,12 +105,12 @@ class Env(object):
       y, x = q.pop()
       if self._visible[y, x] != Cell.HIDDEN:
         continue
-      state = self._bombs[y, x]
+      state = self._counts[y, x]
       self._visible[y, x] = state
-      if state == 0:
+      if state == Cell.ZERO:
         for i, j in neighbors(self._visible, y, x):
           q.append((i, j))
-      elif state == 9:
+      elif state == Cell.BOMB:
         score = -1
     return self._visible, score
 
@@ -116,31 +122,22 @@ class Agent(object):
 
   def reset(self):
     self._actions = []
-    self._mask = None
 
   def step(self, state):
     if self._actions:
       return self._actions.pop()
 
-    if self._mask is None:
-      self._mask = state > Cell.ZERO
+    is_hidden = (state == Cell.HIDDEN)
+    num_hidden = convolve(is_hidden)
+    num_marked = convolve(state == Cell.MARK)
 
-    padded = np.pad(state, 1, 'constant', constant_values=0)
-    hidden = sum(np.roll(padded, n, (0, 1)) == Cell.HIDDEN for n in NEIGHBORS)[1:-1, 1:-1]
-    marked = sum(np.roll(padded, n, (0, 1)) == Cell.MARK for n in NEIGHBORS)[1:-1, 1:-1]
+    to_open = is_hidden & (convolve(num_marked == state) > 0)
+    to_mark = is_hidden & (convolve(num_hidden == state - num_marked) > 0)
 
-    to_open = (marked == state) & self._mask
-    to_mark = (hidden == state - marked) & self._mask
     for y, x in zip(*(to_open.nonzero())):
-      for i, j in neighbors(state, y, x): 
-        if state[i, j] == Cell.HIDDEN:
-          self._actions.append((Action.OPEN, i, j))
+      self._actions.append((Action.OPEN, y, x))
     for y, x in zip(*(to_mark.nonzero())):
-      for i, j in neighbors(state, y, x): 
-        if state[i, j] == Cell.HIDDEN:
-          self._actions.append((Action.MARK, i, j))
-
-    self._mask = self._mask ^ (to_mark | to_open)
+      self._actions.append((Action.MARK, y, x))
 
     np.random.shuffle(self._actions)
 
@@ -148,18 +145,18 @@ class Agent(object):
       return self._actions.pop()
 
 
+def convolve(state):
+  padded = np.pad(state, 1, 'constant', constant_values=0)
+  return sum(np.roll(padded, n, (0, 1)) for n in NEIGHBORS)[1:-1, 1:-1]
+
+
 def draw(window, state):
-  raw_surface = pygame.surfarray.make_surface(COLORS[state])
-  pygame.transform.scale(raw_surface, window.get_size(), window)
-  pygame.display.flip()
-
-
-def counts(bombs):
-  padded = np.pad(bombs, 1, 'constant', constant_values=0)
-  count = sum(np.roll(padded, n, (0, 1)) for n in NEIGHBORS)
-  count = count[1:-1, 1:-1]
-  count[bombs] = Cell.BOMB
-  return count
+  try:
+    raw_surface = pygame.surfarray.make_surface(COLORS[state])
+    pygame.transform.scale(raw_surface, window.get_size(), window)
+    pygame.display.flip()
+  except pygame.error:
+    pass
 
 
 def neighbors(state, y, x):
@@ -170,12 +167,15 @@ def neighbors(state, y, x):
       yield i, j
 
 
+render_count = 0
 def render_thread(obs_queue, window):
+  global render_count
   while True:
     obs = obs_queue.get()
     if obs_queue.empty():
       # Only render the latest observation so we keep up.
       draw(window, obs)
+      render_count += 1
     obs_queue.task_done()
 
 
@@ -186,6 +186,7 @@ def main():
   parser.add_argument('--aps', default=0, type=float, help='Max actions per second')
   parser.add_argument('--window_fraction', type=float, default=0.75,
                       help='How big should the window be relative to resolution.')
+  parser.add_argument('--fullscreen', action='store_true')
   args = parser.parse_args()
 
   if args.aps == 0:
@@ -194,8 +195,14 @@ def main():
   pygame.init()
   display_info = pygame.display.Info()
   display_size = np.array([display_info.current_w, display_info.current_h])
-  window_size = (display_size * args.window_fraction).astype(np.int32)
-  window = pygame.display.set_mode(window_size, 0, 0)
+  window_size = display_size.astype(np.int32)
+  flags = pygame.HWSURFACE | pygame.DOUBLEBUF
+  if args.fullscreen:
+    flags |= pygame.FULLSCREEN
+  else:
+    window_size = (display_size * args.window_fraction).astype(np.int32)
+
+  window = pygame.display.set_mode(window_size, flags, 0)
   pygame.display.set_caption("Minesweeper")
 
   obs_queue = queue.Queue()
@@ -208,24 +215,29 @@ def main():
   print("grid:", grid)
 
   env = Env(grid, args.mines / 100)
-  state, score = env.reset()
   agent = Agent()
-  agent.reset()
 
   step = 0
+  wait = 0
+  run = True
   try:
     start = time.time()
     while True:
       step += 1
       step_start_time = time.time()
-      obs_queue.put(state)
-      action = agent.step(state)
-      if action:
-        state, score = env.step(*action)
-      else:
-        time.sleep(3)
-        state, score = env.reset()
-        agent.reset()
+      if run:
+        if wait >= 0:
+          if wait == 0:
+            state, score = env.reset()
+            agent.reset()
+          wait -= 1
+        else:
+          obs_queue.put(state)
+          action = agent.step(state)
+          if action:
+            state, score = env.step(*action)
+          else:
+            wait = args.aps * 3
 
       for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -233,6 +245,10 @@ def main():
         elif event.type == pygame.KEYDOWN:
           if event.key in (pygame.K_ESCAPE, pygame.K_F4):
             return
+          elif event.key in (pygame.K_SPACE, pygame.K_PAUSE):
+            run = not run
+            if wait > 0:
+              wait = 0
           elif event.key in (pygame.K_PAGEUP, pygame.K_PAGEDOWN):
             args.aps *= 1.25 if event.key == pygame.K_PAGEUP else 1 / 1.25
             print("New max aps: %.1f" % args.aps)
@@ -243,6 +259,7 @@ def main():
   finally:
     elapsed = time.time() - start
     print("Ran %s steps in %0.3f seconds: %.0f steps/second" % (step, elapsed, step / elapsed))
+    print("Rendered %s steps in %0.3f seconds: %.0f steps/second" % (render_count, elapsed, render_count / elapsed))
 
 
 if __name__ == "__main__":
