@@ -94,22 +94,22 @@ class Env(object):
       return self.step(Action.OPEN, y, x)
 
   def step(self, action, y, x):
+    if self._visible[y, x] != Cell.HIDDEN:
+      return
     if action == Action.MARK:
-      if self._visible[y, x] == Cell.HIDDEN:
-        self._visible[y, x] = Cell.MARK
+      self._visible[y, x] = Cell.MARK
       return self._visible, 0
 
-    q = [(y, x)]
+    q = {(y, x)}
     score = 0
     while q:
       y, x = q.pop()
-      if self._visible[y, x] != Cell.HIDDEN:
-        continue
       state = self._counts[y, x]
       self._visible[y, x] = state
       if state == Cell.ZERO:
         for i, j in neighbors(self._visible, y, x):
-          q.append((i, j))
+          if self._visible[y, x] == Cell.HIDDEN:
+            q.add((i, j))
       elif state == Cell.BOMB:
         score = -1
     return self._visible, score
