@@ -1,8 +1,4 @@
-#!/usr/bin/python
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+#!/usr/bin/python3
 
 import argparse
 import functools
@@ -13,11 +9,11 @@ import sys
 import threading
 import time
 
-from future.builtins import range  # pylint: disable=redefined-builtin
 import enum
 import numpy as np
 import pygame
 
+import stopwatch
 
 NEIGHBORS = np.array([
     [-1, -1], [-1, 0], [-1, 1],
@@ -49,6 +45,7 @@ COLORS = np.array([
     grey(0),             # Mark: black
 ])[:, :3].astype(np.uint8)
 
+print(COLORS)
 
 class Cell(enum.IntEnum):
   ZERO = 0
@@ -72,12 +69,12 @@ class Action(enum.Enum):
 
 class Env(object):
 
-  def __init__(self, size, fraction):
+  def __init__(self, size: tuple[int, int], fraction: float):
     self._size = size
     self._fraction = fraction
 
   def reset(self):
-    self._visible = np.zeros(self._size, dtype=np.int)
+    self._visible = np.zeros(self._size, dtype=int)
     self._visible.fill(Cell.HIDDEN)
     while True:
       num = np.prod(self._size)
@@ -93,56 +90,113 @@ class Env(object):
       y, x = zeros[np.random.randint(len(zeros))]
       return self.step(Action.OPEN, y, x)
 
-  def step(self, action, y, x):
-    if self._visible[y, x] != Cell.HIDDEN:
-      return
-    if action == Action.MARK:
-      self._visible[y, x] = Cell.MARK
-      return self._visible, 0
-
-    q = {(y, x)}
+  def step(self, action: Action, y: int, x: int):
+    # print("Actions:", (action, y, x))
+    actions = []
     score = 0
-    while q:
-      y, x = q.pop()
-      state = self._counts[y, x]
-      self._visible[y, x] = state
-      if state == Cell.ZERO:
-        for i, j in neighbors(self._visible, y, x):
-          if self._visible[y, x] == Cell.HIDDEN:
-            q.add((i, j))
-      elif state == Cell.BOMB:
-        score = -1
-    return self._visible, score
+    if self._visible[y, x] == Cell.HIDDEN:
+      if action == Action.MARK:
+        if self._counts[y, x] != Cell.BOMB:
+          print("Bad mark:", y, x)
+        self._visible[y, x] = Cell.MARK
+        actions.append((Action.MARK, y, x))
+      else:
+        q = [(y, x)]
+        score = 0
+        while q:
+          y, x = q.pop()
+          if self._visible[y, x] != Cell.HIDDEN:
+            continue
+          state = self._counts[y, x]
+          self._visible[y, x] = state
+          actions.append((Action.OPEN, y, x))
+          if state == Cell.ZERO:
+            for i, j in neighbors(self._size, y, x):
+              q.append((i, j))
+          elif state == Cell.BOMB:
+            print("BOOOOOOOOOOOOOOOOOOOOOOOOM")
+            score = -1
+    else:
+      print("Bad action:", (action, y, x))
+    return self._visible, actions, score
 
 
 class Agent(object):
 
-  def __init__(self):
+  def __init__(self, size: tuple[int, int]):
+    self._size = size
     self.reset()
 
   def reset(self):
     self._actions = []
+    self._num_hidden = convolve(np.ones(self._size))
+    self._num_marked = np.zeros(self._size)
 
-  def step(self, state):
-    if self._actions:
-      return self._actions.pop()
+  def step_py(self, state, actions: list[tuple[Action, int, int]]):
+    with stopwatch.sw("update"):
+      # Update state
+      for a, y, x in actions:
+        if a == Action.OPEN:
+          for i, j in neighbors(self._size, y, x):
+            self._num_hidden[i, j] -= 1
+        else:  # a == Action.MARK
+          for i, j in neighbors(self._size, y, x):
+            self._num_hidden[i, j] -= 1
+            self._num_marked[i, j] += 1
 
-    is_hidden = (state == Cell.HIDDEN)
-    num_hidden = convolve(is_hidden)
-    num_marked = convolve(state == Cell.MARK)
+    with stopwatch.sw("valid"):
+      # Resulting valid actions
+      for _, y, x in actions:
+        for i, j in neighbors(self._size, y, x):
+          if state[i, j] != Cell.HIDDEN:
+            unmarked = state[i, j] - self._num_marked[i, j]
+            if unmarked == 0:
+              act = Action.OPEN
+            elif unmarked == self._num_hidden[i, j]:
+              act = Action.MARK
+            else:
+              continue
 
-    to_open = is_hidden & (convolve(num_marked == state) > 0)
-    to_mark = is_hidden & (convolve(num_hidden == state - num_marked) > 0)
+            for a, b in neighbors(self._size, i, j):
+              if state[a, b] == Cell.HIDDEN:
+                self._actions.append((act, a, b))
 
-    for y, x in zip(*(to_open.nonzero())):
-      self._actions.append((Action.OPEN, y, x))
-    for y, x in zip(*(to_mark.nonzero())):
-      self._actions.append((Action.MARK, y, x))
+    with stopwatch.sw("return"):
+      while self._actions:
+        a, y, x = self._actions.pop(0)
+        if state[y, x] == Cell.HIDDEN:  # Might already have been opened
+          return a, y, x
 
-    np.random.shuffle(self._actions)
+  def step_np(self, state, unused_actions):
+    with stopwatch.sw("return"):
+      while self._actions:
+        a, y, x = self._actions.pop()
+        if state[y, x] == Cell.HIDDEN:  # Might already have been opened
+          return a, y, x
 
-    if self._actions:
-      return self._actions.pop()
+    with stopwatch.sw("stats"):
+      is_hidden = (state == Cell.HIDDEN)
+      num_hidden = convolve(is_hidden)
+      num_marked = convolve(state == Cell.MARK)
+
+    with stopwatch.sw("find"):
+      to_open = is_hidden & (convolve(num_marked == state) > 0)
+      to_mark = is_hidden & (convolve(num_hidden == state - num_marked) > 0)
+
+    with stopwatch.sw("actions"):
+      for y, x in zip(*(to_open.nonzero())):
+        self._actions.append((Action.OPEN, y, x))
+      for y, x in zip(*(to_mark.nonzero())):
+        self._actions.append((Action.MARK, y, x))
+
+    with stopwatch.sw("shuffle"):
+      np.random.shuffle(self._actions)
+
+    with stopwatch.sw("return"):
+      while self._actions:
+        a, y, x = self._actions.pop()
+        if state[y, x] == Cell.HIDDEN:  # Might already have been opened
+          return a, y, x
 
 
 def convolve(state):
@@ -150,17 +204,8 @@ def convolve(state):
   return sum(np.roll(padded, n, (0, 1)) for n in NEIGHBORS)[1:-1, 1:-1]
 
 
-def draw(window, state):
-  try:
-    raw_surface = pygame.surfarray.make_surface(COLORS[state])
-    pygame.transform.scale(raw_surface, window.get_size(), window)
-    pygame.display.flip()
-  except pygame.error:
-    pass
-
-
-def neighbors(state, y, x):
-  ymax, xmax = state.shape
+def neighbors(size, y, x):
+  ymax, xmax = size
   for n in NEIGHBORS:
     i, j = y + n[0], x + n[1]
     if 0 <= i < ymax and 0 <= j < xmax:
@@ -168,15 +213,27 @@ def neighbors(state, y, x):
 
 
 render_count = 0
-def render_thread(obs_queue, window):
+def draw(window, state):
   global render_count
-  while True:
-    obs = obs_queue.get()
-    if obs_queue.empty():
-      # Only render the latest observation so we keep up.
-      draw(window, obs)
-      render_count += 1
-    obs_queue.task_done()
+  render_count += 1
+  with stopwatch.sw("make_surface"):
+    raw_surface = pygame.surfarray.make_surface(COLORS[state])
+  with stopwatch.sw("scale"):
+    pygame.transform.scale(raw_surface, window.get_size(), window)
+  with stopwatch.sw("update"):
+    pygame.display.update()
+
+
+def render_thread(obs_queue, window):
+  try:
+    while True:
+      obs = obs_queue.get()
+      if obs_queue.empty():
+        # Only render the latest observation so we keep up.
+        draw(window, obs)
+      obs_queue.task_done()
+  except:
+    pass
 
 
 def main():
@@ -196,26 +253,32 @@ def main():
   display_info = pygame.display.Info()
   display_size = np.array([display_info.current_w, display_info.current_h])
   window_size = display_size.astype(np.int32)
-  flags = pygame.HWSURFACE | pygame.DOUBLEBUF
+  flags = 0
+  # flags |= pygame.OPENGL
+  flags |= pygame.HWSURFACE
+  flags |= pygame.DOUBLEBUF
   if args.fullscreen:
     flags |= pygame.FULLSCREEN
   else:
     window_size = (display_size * args.window_fraction).astype(np.int32)
 
-  window = pygame.display.set_mode(window_size, flags, 0)
+  window = pygame.display.set_mode(window_size, flags, display=0)
   pygame.display.set_caption("Minesweeper")
 
-  obs_queue = queue.Queue()
-  renderer = threading.Thread(target=render_thread, name="Renderer", 
-                              args=(obs_queue, window,))
-  renderer.daemon = True
-  renderer.start()
+  # obs_queue = queue.Queue()
+  # renderer = threading.Thread(target=render_thread, name="Renderer", 
+  #                             args=(obs_queue, window,))
+  # renderer.daemon = True
+  # renderer.start()
 
   grid = window_size.transpose() // args.px_size
   print("grid:", grid)
 
+  # np.random.seed(234)
+
+  stopwatch.sw.enabled = True
   env = Env(grid, args.mines / 100)
-  agent = Agent()
+  agent = Agent(grid)
 
   step = 0
   wait = 0
@@ -228,22 +291,28 @@ def main():
       if run:
         if wait >= 0:
           if wait == 0:
-            state, score = env.reset()
+            state, actions, score = env.reset()
             agent.reset()
           wait -= 1
         else:
-          obs_queue.put(state)
-          action = agent.step(state)
+          # obs_queue.put(state)
+          with stopwatch.sw("draw"):
+            draw(window, state)
+          with stopwatch.sw("agent"):
+            # action = agent.step_np(state, actions)
+            action = agent.step_py(state, actions)
           if action:
-            state, score = env.step(*action)
+            with stopwatch.sw("env"):
+              state, actions, score = env.step(*action)
           else:
+            run = False
             wait = args.aps * 3
 
       for event in pygame.event.get():
         if event.type == pygame.QUIT:
           return
         elif event.type == pygame.KEYDOWN:
-          if event.key in (pygame.K_ESCAPE, pygame.K_F4):
+          if event.key in (pygame.K_ESCAPE, pygame.K_F4, pygame.K_q):
             return
           elif event.key in (pygame.K_SPACE, pygame.K_PAUSE):
             run = not run
@@ -253,13 +322,15 @@ def main():
             args.aps *= 1.25 if event.key == pygame.K_PAGEUP else 1 / 1.25
             print("New max aps: %.1f" % args.aps)
       elapsed_time = time.time() - step_start_time
-      time.sleep(max(0, 1 / args.aps - elapsed_time))
+      if args.aps > 0:
+        time.sleep(max(0, 1 / args.aps - elapsed_time))
   except KeyboardInterrupt:
     pass
   finally:
     elapsed = time.time() - start
     print("Ran %s steps in %0.3f seconds: %.0f steps/second" % (step, elapsed, step / elapsed))
     print("Rendered %s steps in %0.3f seconds: %.0f steps/second" % (render_count, elapsed, render_count / elapsed))
+    print(stopwatch.sw)
 
 
 if __name__ == "__main__":
