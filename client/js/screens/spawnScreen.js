@@ -1,10 +1,6 @@
 const SpawnScreen = {
     show: async function (container) {
         const savedPlayer = await MockDB.getPlayer(GameState.currentUser.username);
-        console.log('Spawn screen for:', {
-            username: GameState.currentUser.username,
-            hasExistingPosition: !!savedPlayer
-        });
 
         const html = `
             <div class="spawn-screen">

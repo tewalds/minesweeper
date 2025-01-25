@@ -69,11 +69,6 @@ const PlayScreen = {
     getPlayerDirection: function (playerX, playerY) {
         const dx = playerX - GameState.currentUser.x;
         const dy = playerY - GameState.currentUser.y;
-        console.log('Direction calculation:', {
-            player: { x: playerX, y: playerY },
-            current: { x: GameState.currentUser.x, y: GameState.currentUser.y },
-            delta: { dx, dy }
-        });
 
         // Determine the primary direction based on which delta is larger
         if (Math.abs(dx) > Math.abs(dy)) {
@@ -85,10 +80,7 @@ const PlayScreen = {
 
     renderPlayers: async function () {
         const onlinePlayers = await MockDB.getOnlinePlayers();
-        console.log('Online players:', onlinePlayers);
-
         const indicatorsContainer = document.querySelector('.player-indicators');
-        console.log('Indicators container:', indicatorsContainer);
 
         // Safety check
         if (!indicatorsContainer) {
@@ -103,18 +95,14 @@ const PlayScreen = {
 
         onlinePlayers.forEach(player => {
             if (player.username === GameState.currentUser.username) return; // Skip current player
-            console.log('Processing player:', player.username);
 
             const direction = this.getPlayerDirection(player.position.x, player.position.y);
-            console.log('Direction for', player.username, ':', direction);
 
             if (!playersByDirection[direction]) {
                 playersByDirection[direction] = [];
             }
             playersByDirection[direction].push(player);
         });
-
-        console.log('Players by direction:', playersByDirection);
 
         // Create indicators for each direction
         Object.entries(playersByDirection).forEach(([direction, players]) => {
