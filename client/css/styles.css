@@ -175,41 +175,57 @@ button:disabled {
     flex-direction: column;
     align-items: center;
     gap: 20px;
+    height: 100vh;
+    width: 100vw;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow: hidden;
 }
 
 .player-info-container {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
     display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    max-width: 750px;
+    justify-content: space-between;
+    width: calc(100% - 20px);
+    pointer-events: none;
 }
 
 .player-info {
-    flex: 1;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 10px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background: white;
+    pointer-events: auto;
 }
 
 .game-container {
-    position: relative;
-    width: 750px;
-    /* GRID_SIZE * CELL_SIZE */
-    height: 750px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+}
+
+.game-container.grabbing {
+    cursor: grabbing;
 }
 
 .game-grid {
+    position: absolute;
     display: grid;
     grid-template-columns: repeat(30, 25px);
     grid-template-rows: repeat(30, 25px);
-    border: 1px solid #ddd;
-    background: #f9f9f9;
+    transform-origin: center;
+    transition: transform 0.1s ease-out;
 }
 
 .grid-cell {
@@ -397,8 +413,11 @@ button:disabled {
 
 /* Update existing settings menu styles */
 .settings-menu {
-    position: relative;
+    position: fixed;
+    top: 10px;
+    right: 10px;
     z-index: 1000;
+    pointer-events: auto;
 }
 
 .settings-toggle {

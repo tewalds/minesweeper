@@ -78,6 +78,33 @@
                 "x": -91,
                 "y": 92
             }
+        },
+        "player_Cheesio": {
+            "username": "Cheesio",
+            "avatar": "🌈",
+            "color": "#85FF33",
+            "position": {
+                "x": -4,
+                "y": 1
+            }
+        },
+        "player_Bloo": {
+            "username": "Bloo",
+            "avatar": "🚓",
+            "color": "#0000FF",
+            "position": {
+                "x": -95,
+                "y": 67
+            }
+        },
+        "player_Ola": {
+            "username": "Ola",
+            "avatar": "🌍",
+            "color": "#9999FF",
+            "position": {
+                "x": 4,
+                "y": 4
+            }
         }
     }
 }
