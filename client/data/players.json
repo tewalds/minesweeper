@@ -1,7 +1,7 @@
 {
     "players": {
         "player1": {
-            "username": "Alex",
+            "username": "Anton",
             "avatar": "🚀",
             "color": "#FF0000",
             "lastSeen": 1737822518529,
@@ -52,12 +52,31 @@
         },
         "player_Alex": {
             "username": "Alex",
-            "avatar": "🚀",
-            "color": "#FF0000",
-            "lastSeen": 1737822526236,
+            "avatar": "🌻",
+            "color": "#00FF00",
+            "lastSeen": 1737823980471,
             "position": {
-                "x": 5,
-                "y": 5
+                "x": -41,
+                "y": 4
+            }
+        },
+        "player_Ceerio": {
+            "username": "Ceerio",
+            "avatar": "🚑",
+            "color": "#0000FF",
+            "lastSeen": 1737824063273,
+            "position": {
+                "x": -42,
+                "y": 3
+            }
+        },
+        "player_Booaoa": {
+            "username": "Booaoa",
+            "avatar": "🏛️",
+            "color": "#FFFFB2",
+            "position": {
+                "x": -91,
+                "y": 92
             }
         }
     }

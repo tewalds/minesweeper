@@ -4,8 +4,8 @@ const FileSelectScreen = {
             <div class="login-screen">
                 <h1>Multiplayer Minesweeper</h1>
                 <div class="file-select">
-                    <p>Choose where to store player data:</p>
-                    <button id="select-file" class="primary-button">Select File Location</button>
+                    <p>Choose where to store game data:</p>
+                    <button id="select-folder" class="primary-button">Select Game Data Folder</button>
                 </div>
             </div>
         `;
@@ -14,18 +14,25 @@ const FileSelectScreen = {
     },
 
     attachEventListeners: function () {
-        document.getElementById('select-file').addEventListener('click', async () => {
+        document.getElementById('select-folder').addEventListener('click', async () => {
             try {
-                const success = await MockDB.requestFileAccess();
-                if (success) {
-                    await MockDB.init();
-                    App.showScreen(App.screens.LOGIN);
-                } else {
-                    alert('Failed to get file access. Please try again.');
-                }
+                // Request directory access
+                const dirHandle = await window.showDirectoryPicker();
+
+                // Get file handles for both files
+                MockDB.fileHandle = await dirHandle.getFileHandle('players.json', { create: true });
+                MinesweeperDB.fileHandle = await dirHandle.getFileHandle('mines.json', { create: true });
+
+                // Initialize both DBs
+                await Promise.all([
+                    MockDB.init(),
+                    MinesweeperDB.init()
+                ]);
+
+                App.showScreen(App.screens.LOGIN);
             } catch (error) {
-                console.error('File selection error:', error);
-                alert('Failed to set up file access. Please try again.');
+                console.error('Folder selection error:', error);
+                alert('Failed to set up game data folder. Please try again.');
             }
         });
     }

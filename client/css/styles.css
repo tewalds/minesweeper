@@ -214,6 +214,72 @@ button:disabled {
 
 .grid-cell {
     border: 1px solid #eee;
+    background: #ddd;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    user-select: none;
+}
+
+.grid-cell:hover {
+    background: #d0d0d0;
+}
+
+.grid-cell.revealed {
+    background: #fff;
+    cursor: default;
+}
+
+.grid-cell.revealed:hover {
+    background: #fff;
+}
+
+.grid-cell.revealed.mine {
+    background: #ffebee;
+}
+
+.grid-cell.revealed.empty {
+    color: transparent;
+}
+
+.grid-cell.revealed.adjacent-1 {
+    color: #2196F3;
+}
+
+.grid-cell.revealed.adjacent-2 {
+    color: #4CAF50;
+}
+
+.grid-cell.revealed.adjacent-3 {
+    color: #F44336;
+}
+
+.grid-cell.revealed.adjacent-4 {
+    color: #673AB7;
+}
+
+.grid-cell.revealed.adjacent-5 {
+    color: #795548;
+}
+
+.grid-cell.revealed.adjacent-6 {
+    color: #009688;
+}
+
+.grid-cell.revealed.adjacent-7 {
+    color: #000000;
+}
+
+.grid-cell.revealed.adjacent-8 {
+    color: #757575;
+}
+
+.player-score {
+    margin-left: 10px;
+    font-weight: bold;
 }
 
 .player-indicators {
@@ -223,6 +289,7 @@ button:disabled {
     right: 0;
     bottom: 0;
     pointer-events: none;
+    z-index: 1000;
 }
 
 .direction-container {
@@ -231,28 +298,32 @@ button:disabled {
     flex-direction: column;
     gap: 5px;
     padding: 10px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
+    min-width: 120px;
 }
 
 .direction-container.top {
-    top: 0;
+    top: 10px;
     left: 50%;
     transform: translateX(-50%);
 }
 
 .direction-container.bottom {
-    bottom: 0;
+    bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
 }
 
 .direction-container.left {
-    left: 0;
+    left: 10px;
     top: 50%;
     transform: translateY(-50%);
 }
 
 .direction-container.right {
-    right: 0;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
 }
@@ -263,6 +334,7 @@ button:disabled {
     border-radius: 4px;
     padding: 5px 10px;
     pointer-events: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .indicator-content {
@@ -270,14 +342,24 @@ button:disabled {
     align-items: center;
     gap: 5px;
     font-size: 14px;
+    white-space: nowrap;
 }
 
 .indicator-arrow {
     font-size: 16px;
+    font-weight: bold;
 }
 
 .indicator-avatar {
     font-size: 18px;
+}
+
+.indicator-score {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 12px;
+    margin-left: 5px;
 }
 
 /* Screen Header Layout */

@@ -5,72 +5,49 @@ const MockDB = {
     // Default players data
     defaultPlayers: {
         "player1": {
-            "username": "Alex",
+            "username": "Anton",
             "avatar": "🚀",
             "color": "#FF0000",
-            "lastSeen": Date.now(),
             "position": {
-                "x": 5,
-                "y": 5
+                "x": 120,
+                "y": 0
             }
         },
         "player2": {
             "username": "Bob",
             "avatar": "🎮",
             "color": "#00FF00",
-            "lastSeen": Date.now(),
             "position": {
-                "x": -3,
-                "y": 2
+                "x": 37,
+                "y": 120
             }
         },
         "player3": {
             "username": "Charlie",
             "avatar": "💎",
             "color": "#0000FF",
-            "lastSeen": Date.now(),
             "position": {
-                "x": 2,
-                "y": -4
+                "x": -120,
+                "y": 111
             }
         },
         "player4": {
             "username": "Diana",
             "avatar": "🌈",
             "color": "#FF8000",
-            "lastSeen": Date.now(),
             "position": {
-                "x": -5,
-                "y": -5
+                "x": -88,
+                "y": 20
             }
         },
         "player5": {
             "username": "Eve",
             "avatar": "⭐️",
             "color": "#6600FF",
-            "lastSeen": Date.now(),
             "position": {
-                "x": 8,
-                "y": -2
+                "x": 85,
+                "y": 85
             }
-        }
-    },
-
-    // Request permission and get file handle
-    requestFileAccess: async function () {
-        try {
-            // Request permission to access the file
-            this.fileHandle = await window.showSaveFilePicker({
-                suggestedName: 'players.json',
-                types: [{
-                    description: 'JSON File',
-                    accept: { 'application/json': ['.json'] },
-                }],
-            });
-            return true;
-        } catch (error) {
-            console.error('Failed to get file access:', error);
-            return false;
         }
     },
 
@@ -78,26 +55,28 @@ const MockDB = {
     loadPlayers: async function () {
         try {
             if (!this.fileHandle) {
-                const hasAccess = await this.requestFileAccess();
-                if (!hasAccess) {
-                    throw new Error('No file access granted');
-                }
+                throw new Error('No file handle provided');
             }
 
-            // Read the file
-            const file = await this.fileHandle.getFile();
-            const contents = await file.text();
+            let contents = '';
+            try {
+                const file = await this.fileHandle.getFile();
+                contents = await file.text();
+            } catch (error) {
+                console.error('Error reading players file:', error);
+                this.players = this.defaultPlayers;
+                await this.savePlayers();
+                return;
+            }
 
             try {
                 if (!contents.trim()) {
-                    // Empty file, initialize with default players
                     console.log('Empty file, initializing with default players');
                     this.players = this.defaultPlayers;
                     await this.savePlayers();
                 } else {
                     const data = JSON.parse(contents);
                     if (!data.players || Object.keys(data.players).length === 0) {
-                        // No players or empty players object, initialize with defaults
                         console.log('No players found, initializing with default players');
                         this.players = this.defaultPlayers;
                         await this.savePlayers();
@@ -106,14 +85,15 @@ const MockDB = {
                     }
                 }
             } catch (e) {
-                // Invalid JSON, initialize with default players
-                console.log('Invalid JSON, initializing with default players');
+                console.error('Invalid JSON, initializing with default players');
                 this.players = this.defaultPlayers;
                 await this.savePlayers();
             }
         } catch (error) {
-            console.error('Error loading players:', error);
-            this.players = this.defaultPlayers;
+            console.error('Error in loadPlayers:', error);
+            if (!this.players) {
+                this.players = this.defaultPlayers;
+            }
         }
     },
 
@@ -121,10 +101,7 @@ const MockDB = {
     savePlayers: async function () {
         try {
             if (!this.fileHandle) {
-                const hasAccess = await this.requestFileAccess();
-                if (!hasAccess) {
-                    throw new Error('No file access granted');
-                }
+                throw new Error('No file handle provided');
             }
 
             // Create a FileSystemWritableFileStream to write to
@@ -162,8 +139,7 @@ const MockDB = {
         if (!this.players) {
             await this.loadPlayers();
         }
-        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-        return Object.values(this.players).filter(p => p.lastSeen > fiveMinutesAgo);
+        return Object.values(this.players);
     },
 
     updatePlayerPosition: async function (username, x, y) {
@@ -171,31 +147,39 @@ const MockDB = {
         if (player) {
             player.position.x = x;
             player.position.y = y;
-            player.lastSeen = Date.now();
             await this.savePlayers();
         }
     },
 
     updatePlayerLastSeen: async function (username) {
-        const player = await this.getPlayer(username);
-        if (player) {
-            player.lastSeen = Date.now();
-            await this.savePlayers();
-        }
+        // No-op now that we don't track timestamps
     },
 
     addOrUpdatePlayer: async function (playerData) {
+        // Ensure players is loaded
+        if (!this.players) {
+            await this.loadPlayers();
+        }
+
+        // Remove any existing entries for this username
+        Object.entries(this.players).forEach(([key, player]) => {
+            if (player.username === playerData.username) {
+                delete this.players[key];
+            }
+        });
+
+        // Add new player data
         const playerId = `player_${playerData.username}`;
         this.players[playerId] = {
             username: playerData.username,
             avatar: playerData.avatar,
             color: playerData.color,
-            lastSeen: Date.now(),
             position: {
                 x: playerData.x || 0,
                 y: playerData.y || 0
             }
         };
+
         await this.savePlayers();
     }
-}; 
+};

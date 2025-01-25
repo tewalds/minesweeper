@@ -13,13 +13,14 @@ const App = {
         this.addSettingsMenu();
 
         // Start with file selection if we don't have a file handle
-        if (!MockDB.fileHandle) {
+        if (!MockDB.fileHandle || !MinesweeperDB.fileHandle) {
             this.showScreen(this.screens.FILE_SELECT);
             return;
         }
 
         // Otherwise proceed with normal initialization
         await MockDB.init();
+        await MinesweeperDB.init();
         await GameState.init();
 
         // Determine initial screen
