@@ -1,0 +1,54 @@
+{
+    "players": {
+        "player1": {
+            "username": "Alex",
+            "avatar": "🚀",
+            "color": "#FF0000",
+            "lastSeen": 1737822083834,
+            "position": {
+                "x": 5,
+                "y": 5
+            }
+        },
+        "player2": {
+            "username": "Bob",
+            "avatar": "🎮",
+            "color": "#00FF00",
+            "lastSeen": 1737822083834,
+            "position": {
+                "x": -3,
+                "y": 2
+            }
+        },
+        "player3": {
+            "username": "Charlie",
+            "avatar": "💎",
+            "color": "#0000FF",
+            "lastSeen": 1737822083834,
+            "position": {
+                "x": 2,
+                "y": -4
+            }
+        },
+        "player4": {
+            "username": "Diana",
+            "avatar": "🌈",
+            "color": "#FF8000",
+            "lastSeen": 1737822083834,
+            "position": {
+                "x": -5,
+                "y": -5
+            }
+        },
+        "player5": {
+            "username": "Eve",
+            "avatar": "⭐️",
+            "color": "#6600FF",
+            "lastSeen": 1737822083834,
+            "position": {
+                "x": 8,
+                "y": -2
+            }
+        }
+    }
+}
