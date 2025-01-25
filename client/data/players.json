@@ -159,6 +159,15 @@
                 "x": -3,
                 "y": 1
             }
+        },
+        "player_Ceerio2": {
+            "username": "Ceerio2",
+            "avatar": "🎭",
+            "color": "#4D4DFF",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
         }
     }
 }

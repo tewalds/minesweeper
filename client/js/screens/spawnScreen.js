@@ -60,10 +60,26 @@ const SpawnScreen = {
     },
 
     setSpawnLocation: async function (x, y) {
-        GameState.currentUser.x = x;
-        GameState.currentUser.y = y;
-        await GameState.finalizePlayer(x, y);
-        await App.showScreen(App.screens.PLAY);
+        try {
+            GameState.currentUser.x = x;
+            GameState.currentUser.y = y;
+
+            // Ensure we have all required data before proceeding
+            if (!GameState.currentUser.username ||
+                !GameState.currentUser.avatar ||
+                !GameState.currentUser.color ||
+                x === null ||
+                y === null) {
+                throw new Error('Missing required player data');
+            }
+
+            // Wait for player data to be saved before proceeding
+            await GameState.finalizePlayer(x, y);
+            await App.showScreen(App.screens.PLAY);
+        } catch (error) {
+            console.error('Failed to set spawn location:', error);
+            alert('Failed to set spawn location. Please try again.');
+        }
     },
 
     // Find an empty cell around a position
