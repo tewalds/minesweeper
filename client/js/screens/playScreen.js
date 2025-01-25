@@ -20,11 +20,14 @@ const PlayScreen = {
                         </div>
                     </div>
                 </div>
-                <div class="game-grid" style="
-                    width: ${this.GRID_SIZE * this.CELL_SIZE}px; 
-                    height: ${this.GRID_SIZE * this.CELL_SIZE}px;
-                ">
-                    ${this.createGrid()}
+                <div class="game-container">
+                    <div class="player-indicators"></div>
+                    <div class="game-grid" style="
+                        width: ${this.GRID_SIZE * this.CELL_SIZE}px; 
+                        height: ${this.GRID_SIZE * this.CELL_SIZE}px;
+                    ">
+                        ${this.createGrid()}
+                    </div>
                 </div>
             </div>
         `;
@@ -42,46 +45,64 @@ const PlayScreen = {
         return grid;
     },
 
-    renderPlayers: async function () {
-        const gridOffsetX = Math.floor(this.GRID_SIZE / 2);
-        const gridOffsetY = Math.floor(this.GRID_SIZE / 2);
+    getPlayerDirection: function (playerX, playerY) {
+        const dx = playerX - GameState.currentUser.x;
+        const dy = playerY - GameState.currentUser.y;
 
-        // Calculate grid boundaries in world coordinates
-        const minX = GameState.currentUser.x - gridOffsetX;
-        const maxX = GameState.currentUser.x + gridOffsetX;
-        const minY = GameState.currentUser.y - gridOffsetY;
-        const maxY = GameState.currentUser.y + gridOffsetY;
-
-        // Place current player in center
-        const centerCell = document.querySelector(`.grid-cell[data-x="${gridOffsetX}"][data-y="${gridOffsetY}"]`);
-        if (centerCell) {
-            centerCell.innerHTML = `
-                <div class="player current-player" style="color: ${GameState.currentUser.color}; background-color: ${GameState.currentUser.color}20">
-                    ${GameState.currentUser.avatar}
-                </div>
-            `;
+        // Determine the primary direction based on which delta is larger
+        if (Math.abs(dx) > Math.abs(dy)) {
+            return dx > 0 ? 'right' : 'left';
+        } else {
+            return dy > 0 ? 'bottom' : 'top';
         }
+    },
 
-        // Place other players if they're within view
+    renderPlayers: async function () {
         const onlinePlayers = await MockDB.getOnlinePlayers();
+        const indicatorsContainer = document.querySelector('.player-indicators');
+
+        // Group players by direction
+        const playersByDirection = {};
+
         onlinePlayers.forEach(player => {
             if (player.username === GameState.currentUser.username) return; // Skip current player
 
-            const { x, y } = player.position;
-            if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
-                // Convert world coordinates to grid coordinates
-                const gridX = gridOffsetX + (x - GameState.currentUser.x);
-                const gridY = gridOffsetY + (y - GameState.currentUser.y);
-
-                const cell = document.querySelector(`.grid-cell[data-x="${gridX}"][data-y="${gridY}"]`);
-                if (cell) {
-                    cell.innerHTML = `
-                        <div class="player" style="color: ${player.color}; background-color: ${player.color}20">
-                            ${player.avatar}
-                        </div>
-                    `;
-                }
+            const direction = this.getPlayerDirection(player.position.x, player.position.y);
+            if (!playersByDirection[direction]) {
+                playersByDirection[direction] = [];
             }
+            playersByDirection[direction].push(player);
         });
+
+        // Create indicators for each direction
+        Object.entries(playersByDirection).forEach(([direction, players]) => {
+            const directionContainer = document.createElement('div');
+            directionContainer.className = `direction-container ${direction}`;
+
+            players.forEach(player => {
+                const indicator = document.createElement('div');
+                indicator.className = 'player-indicator';
+                indicator.innerHTML = `
+                    <div class="indicator-content" style="color: ${player.color}">
+                        <span class="indicator-arrow">${this.getDirectionArrow(direction)}</span>
+                        <span class="indicator-avatar">${player.avatar}</span>
+                        <span class="indicator-name">${player.username}</span>
+                    </div>
+                `;
+                directionContainer.appendChild(indicator);
+            });
+
+            indicatorsContainer.appendChild(directionContainer);
+        });
+    },
+
+    getDirectionArrow: function (direction) {
+        const arrows = {
+            top: '↑',
+            right: '→',
+            bottom: '↓',
+            left: '←'
+        };
+        return arrows[direction];
     }
 }; 

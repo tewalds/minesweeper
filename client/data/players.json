@@ -4,7 +4,7 @@
             "username": "Alex",
             "avatar": "🚀",
             "color": "#FF0000",
-            "lastSeen": 1737822083834,
+            "lastSeen": 1737822518529,
             "position": {
                 "x": 5,
                 "y": 5
@@ -14,7 +14,7 @@
             "username": "Bob",
             "avatar": "🎮",
             "color": "#00FF00",
-            "lastSeen": 1737822083834,
+            "lastSeen": 1737822514437,
             "position": {
                 "x": -3,
                 "y": 2
@@ -24,7 +24,7 @@
             "username": "Charlie",
             "avatar": "💎",
             "color": "#0000FF",
-            "lastSeen": 1737822083834,
+            "lastSeen": 1737822514437,
             "position": {
                 "x": 2,
                 "y": -4
@@ -34,7 +34,7 @@
             "username": "Diana",
             "avatar": "🌈",
             "color": "#FF8000",
-            "lastSeen": 1737822083834,
+            "lastSeen": 1737822514437,
             "position": {
                 "x": -5,
                 "y": -5
@@ -44,10 +44,20 @@
             "username": "Eve",
             "avatar": "⭐️",
             "color": "#6600FF",
-            "lastSeen": 1737822083834,
+            "lastSeen": 1737822514437,
             "position": {
                 "x": 8,
                 "y": -2
+            }
+        },
+        "player_Alex": {
+            "username": "Alex",
+            "avatar": "🚀",
+            "color": "#FF0000",
+            "lastSeen": 1737822526236,
+            "position": {
+                "x": 5,
+                "y": 5
             }
         }
     }
