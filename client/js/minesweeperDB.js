@@ -251,9 +251,20 @@ const MinesweeperDB = {
         if (this.mines.markers[key]?.username === username) {
             delete this.mines.markers[key];
         } else {
-            this.mines.markers[key] = { username, avatar };
+            await this.setMarker(x, y, username, avatar);
         }
 
+        await this.saveMines();
+        return true;
+    },
+
+    setMarker: async function (x, y, username, avatar) {
+        if (!this.isValidPosition(x, y)) return false;
+
+        const key = `${x},${y}`;
+        if (this.mines.revealed[key]) return false;
+
+        this.mines.markers[key] = { username, avatar };
         await this.saveMines();
         return true;
     },

@@ -163,6 +163,7 @@ const PlayScreen = {
                 cell.className = 'grid-cell';
                 cell.innerHTML = '';
                 cell.style.color = '';
+                cell.style.backgroundColor = '';
 
                 // Check if cell is revealed
                 if (MinesweeperDB.mines.revealed[key]) {
@@ -179,7 +180,10 @@ const PlayScreen = {
                     const marker = MinesweeperDB.mines.markers[key];
                     if (marker) {
                         cell.innerHTML = marker.avatar;
-                        cell.style.color = (await MockDB.getPlayer(marker.username))?.color || '#000';
+                        const player = await MockDB.getPlayer(marker.username);
+                        if (player) {
+                            cell.style.color = player.color;
+                        }
                     }
                 }
             }
@@ -351,6 +355,16 @@ const PlayScreen = {
 
             const x = parseInt(cell.dataset.x);
             const y = parseInt(cell.dataset.y);
+            const key = `${x},${y}`;
+
+            // Check if cell has any flag
+            const marker = MinesweeperDB.mines.markers[key];
+            if (marker) {
+                // Block click if there's any flag
+                return;
+            }
+
+            // Otherwise proceed with reveal
             await MinesweeperDB.revealCell(x, y, GameState.currentUser.username);
             await this.renderMinesweeperState();
         });
@@ -362,7 +376,17 @@ const PlayScreen = {
 
             const x = parseInt(cell.dataset.x);
             const y = parseInt(cell.dataset.y);
-            await MinesweeperDB.toggleMarker(x, y, GameState.currentUser.username, GameState.currentUser.avatar);
+            const key = `${x},${y}`;
+
+            // Check if cell has any flag
+            const marker = MinesweeperDB.mines.markers[key];
+            if (marker) {
+                // Remove any flag
+                await MinesweeperDB.toggleMarker(x, y, marker.username, marker.avatar);
+            } else {
+                // Add my flag
+                await MinesweeperDB.setMarker(x, y, GameState.currentUser.username, GameState.currentUser.avatar);
+            }
             await this.renderMinesweeperState();
         });
     },
