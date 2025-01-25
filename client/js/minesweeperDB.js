@@ -3,14 +3,14 @@ const MinesweeperDB = {
     fileHandle: null,
 
     // Initialize with 15% mines
-    generateMines: function (gridSize) {
-        const totalCells = gridSize * gridSize;
+    generateMines: function (gridWidth, gridHeight) {
+        const totalCells = gridWidth * gridHeight;
         const mineCount = Math.floor(totalCells * 0.15);
         const positions = [];
 
         while (positions.length < mineCount) {
-            const x = Math.floor(Math.random() * gridSize);
-            const y = Math.floor(Math.random() * gridSize);
+            const x = Math.floor(Math.random() * gridWidth);
+            const y = Math.floor(Math.random() * gridHeight);
             const pos = `${x},${y}`;
 
             // Check if position is already taken
@@ -46,7 +46,7 @@ const MinesweeperDB = {
                 console.error('Error reading mines file:', error);
                 // If we can't read the file, initialize with new data
                 this.mines = {
-                    positions: this.generateMines(30),
+                    positions: this.generateMines(80, 40),
                     revealed: {},
                     markers: {},
                     scores: this.defaultScores
@@ -59,7 +59,7 @@ const MinesweeperDB = {
                 if (!contents.trim()) {
                     // Empty file, initialize with new mines and default scores
                     this.mines = {
-                        positions: this.generateMines(30),
+                        positions: this.generateMines(80, 40),
                         revealed: {},
                         markers: {},
                         scores: this.defaultScores
@@ -69,7 +69,7 @@ const MinesweeperDB = {
                     const data = JSON.parse(contents);
                     if (!data.mines) {
                         this.mines = {
-                            positions: this.generateMines(30),
+                            positions: this.generateMines(80, 40),
                             revealed: {},
                             markers: {},
                             scores: this.defaultScores
@@ -87,7 +87,7 @@ const MinesweeperDB = {
             } catch (e) {
                 console.error('Invalid JSON, initializing with new mines');
                 this.mines = {
-                    positions: this.generateMines(30),
+                    positions: this.generateMines(80, 40),
                     revealed: {},
                     markers: {},
                     scores: this.defaultScores
@@ -99,7 +99,7 @@ const MinesweeperDB = {
             // Ensure we always have valid data even if everything fails
             if (!this.mines) {
                 this.mines = {
-                    positions: this.generateMines(30),
+                    positions: this.generateMines(80, 40),
                     revealed: {},
                     markers: {},
                     scores: this.defaultScores
@@ -129,7 +129,7 @@ const MinesweeperDB = {
         await this.loadMines();
         if (!this.mines) {
             this.mines = {
-                positions: this.generateMines(30),
+                positions: this.generateMines(80, 40),
                 revealed: {},
                 markers: {},
                 scores: this.defaultScores
@@ -138,9 +138,20 @@ const MinesweeperDB = {
         }
     },
 
+    // Regenerate the grid
+    regenerateGrid: async function () {
+        this.mines = {
+            positions: this.generateMines(80, 40),
+            revealed: {},
+            markers: {},
+            scores: this.mines ? this.mines.scores : this.defaultScores // Preserve existing scores
+        };
+        await this.saveMines();
+    },
+
     // Game methods
     isValidPosition: function (x, y) {
-        return x >= 0 && x < 30 && y >= 0 && y < 30;
+        return x >= 0 && x < 80 && y >= 0 && y < 40;
     },
 
     isMine: function (x, y) {

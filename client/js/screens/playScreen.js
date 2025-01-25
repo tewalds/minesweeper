@@ -1,5 +1,6 @@
 const PlayScreen = {
-    GRID_SIZE: 30, // 30x30 grid
+    GRID_WIDTH: 80, // 80 cells wide
+    GRID_HEIGHT: 40, // 40 cells tall
     CELL_SIZE: 25, // pixels
     UPDATE_INTERVAL: 2000, // 2 seconds
     MIN_ZOOM: 0.2,
@@ -29,14 +30,15 @@ const PlayScreen = {
                 <div class="settings-menu">
                     <button class="header-button settings-toggle">⚙️ Menu</button>
                     <div class="settings-dropdown hidden">
+                        <button class="new-grid-button">🔄 New Grid</button>
                         <button class="logout-button">Logout</button>
                     </div>
                 </div>
                 <div class="game-container">
                     <div class="player-indicators"></div>
                     <div class="game-grid" style="
-                        width: ${this.GRID_SIZE * this.CELL_SIZE}px; 
-                        height: ${this.GRID_SIZE * this.CELL_SIZE}px;
+                        width: ${this.GRID_WIDTH * this.CELL_SIZE}px; 
+                        height: ${this.GRID_HEIGHT * this.CELL_SIZE}px;
                     ">
                         ${this.createGrid()}
                     </div>
@@ -56,8 +58,8 @@ const PlayScreen = {
 
     createGrid: function () {
         let grid = '';
-        for (let y = 0; y < this.GRID_SIZE; y++) {
-            for (let x = 0; x < this.GRID_SIZE; x++) {
+        for (let y = 0; y < this.GRID_HEIGHT; y++) {
+            for (let x = 0; x < this.GRID_WIDTH; x++) {
                 grid += `<div class="grid-cell" data-x="${x}" data-y="${y}"></div>`;
             }
         }
@@ -162,12 +164,17 @@ const PlayScreen = {
         }
 
         // Update all cells based on game state
-        for (let y = 0; y < this.GRID_SIZE; y++) {
-            for (let x = 0; x < this.GRID_SIZE; x++) {
+        for (let y = 0; y < this.GRID_HEIGHT; y++) {
+            for (let x = 0; x < this.GRID_WIDTH; x++) {
                 const cell = grid.querySelector(`.grid-cell[data-x="${x}"][data-y="${y}"]`);
                 if (!cell) continue;
 
                 const key = `${x},${y}`;
+
+                // Reset cell to default state
+                cell.className = 'grid-cell';
+                cell.innerHTML = '';
+                cell.style.color = '';
 
                 // Check if cell is revealed
                 if (MinesweeperDB.mines.revealed[key]) {
@@ -185,9 +192,6 @@ const PlayScreen = {
                     if (marker) {
                         cell.innerHTML = marker.avatar;
                         cell.style.color = (await MockDB.getPlayer(marker.username))?.color || '#000';
-                    } else {
-                        cell.innerHTML = '';
-                        cell.style.color = '';
                     }
                 }
             }
@@ -204,8 +208,8 @@ const PlayScreen = {
         const gameContainer = document.querySelector('.game-container');
         const grid = document.querySelector('.game-grid');
         if (gameContainer && grid) {
-            const gridWidth = this.GRID_SIZE * this.CELL_SIZE;
-            const gridHeight = this.GRID_SIZE * this.CELL_SIZE;
+            const gridWidth = this.GRID_WIDTH * this.CELL_SIZE;
+            const gridHeight = this.GRID_HEIGHT * this.CELL_SIZE;
 
             // Calculate the center position
             this.offsetX = (gameContainer.clientWidth - gridWidth * this.zoom) / 2;
@@ -225,8 +229,47 @@ const PlayScreen = {
     attachGameHandlers: function () {
         const container = document.querySelector('.game-container');
         const grid = document.querySelector('.game-grid');
+        const settingsToggle = document.querySelector('.settings-toggle');
+        const settingsDropdown = document.querySelector('.settings-dropdown');
+        const newGridButton = document.querySelector('.new-grid-button');
+        const logoutButton = document.querySelector('.logout-button');
 
         if (!container || !grid) return;
+
+        // Settings menu toggle
+        settingsToggle?.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent click from reaching document
+            settingsDropdown?.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!settingsDropdown?.contains(e.target) && !settingsToggle?.contains(e.target)) {
+                settingsDropdown?.classList.add('hidden');
+            }
+        });
+
+        // New Grid button
+        newGridButton?.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Prevent click from reaching document
+            if (confirm('Are you sure you want to generate a new grid? This will affect all players.')) {
+                await MinesweeperDB.regenerateGrid();
+                // Force a complete grid refresh
+                const grid = document.querySelector('.game-grid');
+                if (grid) {
+                    grid.innerHTML = this.createGrid();
+                }
+                await this.renderMinesweeperState();
+                settingsDropdown?.classList.add('hidden');
+            }
+        });
+
+        // Logout button
+        logoutButton?.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent click from reaching document
+            window.location.hash = '#login';
+            settingsDropdown?.classList.add('hidden');
+        });
 
         // Mouse drag handling
         container.addEventListener('mousedown', (e) => {

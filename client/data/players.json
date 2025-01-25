@@ -105,6 +105,15 @@
                 "x": 4,
                 "y": 4
             }
+        },
+        "player_Aaa": {
+            "username": "Aaa",
+            "avatar": "☎️",
+            "color": "#FF0000",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
         }
     }
 }

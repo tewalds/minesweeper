@@ -222,8 +222,8 @@ button:disabled {
 .game-grid {
     position: absolute;
     display: grid;
-    grid-template-columns: repeat(30, 25px);
-    grid-template-rows: repeat(30, 25px);
+    grid-template-columns: repeat(80, 25px);
+    grid-template-rows: repeat(40, 25px);
     transform-origin: center;
     transition: transform 0.1s ease-out;
 }
@@ -421,7 +421,7 @@ button:disabled {
 }
 
 .settings-toggle {
-    background: #666;
+    background: rgba(102, 102, 102, 0.9);
     color: white;
     border: none;
     border-radius: 4px;
@@ -440,12 +440,14 @@ button:disabled {
     position: absolute;
     top: 100%;
     right: 0;
+    margin-top: 5px;
     background: white;
     border: 1px solid #ddd;
     border-radius: 4px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     padding: 5px;
     min-width: 120px;
+    display: block;
 }
 
 .settings-dropdown.hidden {
@@ -461,6 +463,13 @@ button:disabled {
     color: #333;
     cursor: pointer;
     border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-dropdown button:not(:last-child) {
+    border-bottom: 1px solid #eee;
 }
 
 .settings-dropdown button:hover {
