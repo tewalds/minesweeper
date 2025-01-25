@@ -166,7 +166,7 @@ const PlayScreen = {
                 cell.style.backgroundColor = '';
 
                 // Check if cell is revealed
-                if (MinesweeperDB.mines.revealed[key]) {
+                if (MinesweeperDB.mines.revealed.has(key)) {
                     if (MinesweeperDB.isMine(x, y)) {
                         cell.innerHTML = '💣';
                         cell.classList.add('revealed', 'mine');
@@ -177,7 +177,7 @@ const PlayScreen = {
                     }
                 } else {
                     // Check if cell is marked
-                    const marker = MinesweeperDB.mines.markers[key];
+                    const marker = MinesweeperDB.mines.markers.get(key);
                     if (marker) {
                         cell.innerHTML = marker.avatar;
                         const player = await MockDB.getPlayer(marker.username);
@@ -358,7 +358,7 @@ const PlayScreen = {
             const key = `${x},${y}`;
 
             // Check if cell has any flag
-            const marker = MinesweeperDB.mines.markers[key];
+            const marker = MinesweeperDB.mines.markers.get(key);
             if (marker) {
                 // Block click if there's any flag
                 return;
@@ -379,7 +379,7 @@ const PlayScreen = {
             const key = `${x},${y}`;
 
             // Check if cell has any flag
-            const marker = MinesweeperDB.mines.markers[key];
+            const marker = MinesweeperDB.mines.markers.get(key);
             if (marker) {
                 // Remove any flag
                 await MinesweeperDB.toggleMarker(x, y, marker.username, marker.avatar);

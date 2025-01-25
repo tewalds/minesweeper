@@ -1,29 +1,31 @@
 const MinesweeperDB = {
     mines: null,
     fileHandle: null,
-    minePositionMap: null, // For O(1) mine lookup
+    minePositionMap: null,
+    gridWidth: 80,
+    gridHeight: 40,
 
     // Initialize with 15% mines
     generateMines: function (gridWidth, gridHeight) {
         const totalCells = gridWidth * gridHeight;
         const mineCount = Math.floor(totalCells * 0.15);
-        const positions = [];
-        const positionMap = new Set(); // Track taken positions
+        const positions = new Array(mineCount);
+        const positionMap = new Set();
 
-        while (positions.length < mineCount) {
+        let i = 0;
+        while (i < mineCount) {
             const x = Math.floor(Math.random() * gridWidth);
             const y = Math.floor(Math.random() * gridHeight);
             const pos = `${x},${y}`;
 
-            // Check if position is already taken using Set
             if (!positionMap.has(pos)) {
-                positions.push({ x, y });
+                positions[i] = { x, y };
                 positionMap.add(pos);
+                i++;
             }
         }
 
-        // Create mine position map
-        this.minePositionMap = new Set(positions.map(p => `${p.x},${p.y}`));
+        this.minePositionMap = positionMap;
         return positions;
     },
 
@@ -34,6 +36,16 @@ const MinesweeperDB = {
         "Charlie": 35,
         "Diana": 19,
         "Eve": 31
+    },
+
+    // Create efficient data structures
+    createEmptyState: function () {
+        return {
+            positions: this.generateMines(this.gridWidth, this.gridHeight),
+            revealed: new Set(), // Use Set for O(1) lookups
+            markers: new Map(), // Use Map for O(1) lookups and better memory
+            scores: { ...this.defaultScores }
+        };
     },
 
     // Load mines data
@@ -49,81 +61,64 @@ const MinesweeperDB = {
                 contents = await file.text();
             } catch (error) {
                 console.error('Error reading mines file:', error);
-                // If we can't read the file, initialize with new data
-                this.mines = {
-                    positions: this.generateMines(80, 40),
-                    revealed: {},
-                    markers: {},
-                    scores: this.defaultScores
-                };
+                this.mines = this.createEmptyState();
                 await this.saveMines();
                 return;
             }
 
             try {
                 if (!contents.trim()) {
-                    // Empty file, initialize with new mines and default scores
-                    this.mines = {
-                        positions: this.generateMines(80, 40),
-                        revealed: {},
-                        markers: {},
-                        scores: this.defaultScores
-                    };
+                    this.mines = this.createEmptyState();
                     await this.saveMines();
                 } else {
                     const data = JSON.parse(contents);
                     if (!data.mines) {
-                        this.mines = {
-                            positions: this.generateMines(80, 40),
-                            revealed: {},
-                            markers: {},
-                            scores: this.defaultScores
-                        };
+                        this.mines = this.createEmptyState();
                         await this.saveMines();
                     } else {
-                        this.mines = data.mines;
+                        // Convert loaded data to efficient structures
+                        this.mines = {
+                            positions: data.mines.positions,
+                            revealed: new Set(Object.keys(data.mines.revealed)),
+                            markers: new Map(Object.entries(data.mines.markers)),
+                            scores: data.mines.scores || this.defaultScores
+                        };
                         // Rebuild mine position map
                         this.minePositionMap = new Set(this.mines.positions.map(p => `${p.x},${p.y}`));
-                        // Ensure default players have scores
-                        if (!this.mines.scores) {
-                            this.mines.scores = this.defaultScores;
-                            await this.saveMines();
-                        }
                     }
                 }
             } catch (e) {
                 console.error('Invalid JSON, initializing with new mines');
-                this.mines = {
-                    positions: this.generateMines(80, 40),
-                    revealed: {},
-                    markers: {},
-                    scores: this.defaultScores
-                };
+                this.mines = this.createEmptyState();
                 await this.saveMines();
             }
         } catch (error) {
             console.error('Error in loadMines:', error);
-            // Ensure we always have valid data even if everything fails
             if (!this.mines) {
-                this.mines = {
-                    positions: this.generateMines(80, 40),
-                    revealed: {},
-                    markers: {},
-                    scores: this.defaultScores
-                };
+                this.mines = this.createEmptyState();
             }
         }
     },
 
-    // Save mines to file
+    // Save mines to file - convert Sets/Maps to JSON-friendly format
     saveMines: async function () {
         try {
             if (!this.fileHandle) {
                 throw new Error('No file handle provided');
             }
 
+            // Convert to JSON-friendly format
+            const saveData = {
+                mines: {
+                    positions: this.mines.positions,
+                    revealed: Object.fromEntries([...this.mines.revealed].map(key => [key, true])),
+                    markers: Object.fromEntries(this.mines.markers),
+                    scores: this.mines.scores
+                }
+            };
+
             const writable = await this.fileHandle.createWritable();
-            await writable.write(JSON.stringify({ mines: this.mines }, null, 4));
+            await writable.write(JSON.stringify(saveData, null, 4));
             await writable.close();
         } catch (error) {
             console.error('Error saving mines:', error);
@@ -135,12 +130,7 @@ const MinesweeperDB = {
     init: async function () {
         await this.loadMines();
         if (!this.mines) {
-            this.mines = {
-                positions: this.generateMines(80, 40),
-                revealed: {},
-                markers: {},
-                scores: this.defaultScores
-            };
+            this.mines = this.createEmptyState();
             await this.saveMines();
         }
     },
@@ -148,9 +138,9 @@ const MinesweeperDB = {
     // Regenerate the grid
     regenerateGrid: async function () {
         this.mines = {
-            positions: this.generateMines(80, 40),
-            revealed: {},
-            markers: {},
+            positions: this.generateMines(this.gridWidth, this.gridHeight),
+            revealed: new Set(),
+            markers: new Map(),
             scores: this.mines ? this.mines.scores : this.defaultScores // Preserve existing scores
         };
         await this.saveMines();
@@ -158,7 +148,7 @@ const MinesweeperDB = {
 
     // Game methods
     isValidPosition: function (x, y) {
-        return x >= 0 && x < 80 && y >= 0 && y < 40;
+        return x >= 0 && x < this.gridWidth && y >= 0 && y < this.gridHeight;
     },
 
     isMine: function (x, y) {
@@ -182,29 +172,24 @@ const MinesweeperDB = {
         return count;
     },
 
-    // Optimized reveal using queue-based flood fill
     revealCell: async function (x, y, username) {
         if (!this.isValidPosition(x, y)) return false;
 
         const key = `${x},${y}`;
-        if (this.mines.revealed[key]) return false;
+        if (this.mines.revealed.has(key)) return false;
 
         // Track all cells to reveal
         const cellsToReveal = new Set();
         const queue = [[x, y]];
 
-        // Flood fill to find all cells to reveal
         while (queue.length > 0) {
             const [currX, currY] = queue.shift();
             const currKey = `${currX},${currY}`;
 
-            // Skip if already processed
             if (cellsToReveal.has(currKey)) continue;
 
-            // Add to reveal set
             cellsToReveal.add(currKey);
 
-            // If it's an empty cell, add neighbors to queue
             if (!this.isMine(currX, currY) && this.getAdjacentMines(currX, currY) === 0) {
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
@@ -212,7 +197,7 @@ const MinesweeperDB = {
                         const newX = currX + dx;
                         const newY = currY + dy;
                         const newKey = `${newX},${newY}`;
-                        if (this.isValidPosition(newX, newY) && !this.mines.revealed[newKey] && !cellsToReveal.has(newKey)) {
+                        if (this.isValidPosition(newX, newY) && !this.mines.revealed.has(newKey) && !cellsToReveal.has(newKey)) {
                             queue.push([newX, newY]);
                         }
                     }
@@ -223,21 +208,18 @@ const MinesweeperDB = {
         // Apply all reveals at once
         let scoreIncrement = 0;
         for (const cellKey of cellsToReveal) {
-            this.mines.revealed[cellKey] = true;
-            // Only increment score for non-mine cells
+            this.mines.revealed.add(cellKey);
             if (!this.isMine(...cellKey.split(',').map(Number))) {
                 scoreIncrement++;
             }
         }
 
-        // Update score
         if (this.isMine(x, y)) {
             this.mines.scores[username] = 0;
         } else {
             this.mines.scores[username] = (this.mines.scores[username] || 0) + scoreIncrement;
         }
 
-        // Save only once after all reveals
         await this.saveMines();
         return true;
     },
@@ -246,10 +228,11 @@ const MinesweeperDB = {
         if (!this.isValidPosition(x, y)) return false;
 
         const key = `${x},${y}`;
-        if (this.mines.revealed[key]) return false;
+        if (this.mines.revealed.has(key)) return false;
 
-        if (this.mines.markers[key]?.username === username) {
-            delete this.mines.markers[key];
+        const existingMarker = this.mines.markers.get(key);
+        if (existingMarker?.username === username) {
+            this.mines.markers.delete(key);
         } else {
             await this.setMarker(x, y, username, avatar);
         }
@@ -262,9 +245,9 @@ const MinesweeperDB = {
         if (!this.isValidPosition(x, y)) return false;
 
         const key = `${x},${y}`;
-        if (this.mines.revealed[key]) return false;
+        if (this.mines.revealed.has(key)) return false;
 
-        this.mines.markers[key] = { username, avatar };
+        this.mines.markers.set(key, { username, avatar });
         await this.saveMines();
         return true;
     },
