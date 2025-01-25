@@ -2038,7 +2038,8 @@
             "44,14": true,
             "44,13": true,
             "21,16": true,
-            "35,18": true
+            "35,18": true,
+            "29,14": true
         },
         "markers": {},
         "scores": {
@@ -2047,7 +2048,7 @@
             "Charlie": 35,
             "Diana": 19,
             "Eve": 31,
-            "Aaa": 0
+            "Aaa": 1
         }
     }
 }

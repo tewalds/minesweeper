@@ -3,8 +3,8 @@ const PlayScreen = {
     GRID_HEIGHT: 40, // 40 cells tall
     CELL_SIZE: 25, // pixels
     UPDATE_INTERVAL: 2000, // 2 seconds
-    MIN_ZOOM: 0.2,
-    MAX_ZOOM: 2,
+    MIN_ZOOM: 0.40, // 40% minimum zoom
+    MAX_ZOOM: 2.0, // 200% maximum zoom
     ZOOM_SPEED: 0.1,
     updateInterval: null,
     isDragging: false,
