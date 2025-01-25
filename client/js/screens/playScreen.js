@@ -1,9 +1,8 @@
 const PlayScreen = {
-    GRID_WIDTH: 80, // 80 cells wide
-    GRID_HEIGHT: 40, // 40 cells tall
     CELL_SIZE: 25, // pixels
     UPDATE_INTERVAL: 2000, // 2 seconds
     MIN_ZOOM: 0.40, // 40% minimum zoom
+    MIN_ZOOM: 0.20, // 20% minimum zoom to see more of the larger grid
     MAX_ZOOM: 2.0, // 200% maximum zoom
     ZOOM_SPEED: 0.1,
     updateInterval: null,
@@ -15,6 +14,9 @@ const PlayScreen = {
     zoom: 1,
 
     show: async function (container) {
+        // Set cell size CSS variable
+        document.documentElement.style.setProperty('--cell-size', `${this.CELL_SIZE}px`);
+
         const html = `
             <div class="play-screen">
                 <div class="player-info-container">
@@ -37,8 +39,9 @@ const PlayScreen = {
                 <div class="game-container">
                     <div class="player-indicators"></div>
                     <div class="game-grid" style="
-                        width: ${this.GRID_WIDTH * this.CELL_SIZE}px; 
-                        height: ${this.GRID_HEIGHT * this.CELL_SIZE}px;
+                        width: ${MinesweeperDB.gridWidth * this.CELL_SIZE}px; 
+                        height: ${MinesweeperDB.gridHeight * this.CELL_SIZE}px;
+                        grid-template-columns: repeat(${MinesweeperDB.gridWidth}, var(--cell-size));
                     ">
                         ${this.createGrid()}
                     </div>
@@ -58,8 +61,8 @@ const PlayScreen = {
 
     createGrid: function () {
         let grid = '';
-        for (let y = 0; y < this.GRID_HEIGHT; y++) {
-            for (let x = 0; x < this.GRID_WIDTH; x++) {
+        for (let y = 0; y < MinesweeperDB.gridHeight; y++) {
+            for (let x = 0; x < MinesweeperDB.gridWidth; x++) {
                 grid += `<div class="grid-cell" data-x="${x}" data-y="${y}"></div>`;
             }
         }
@@ -151,43 +154,67 @@ const PlayScreen = {
             return;
         }
 
-        // Update all cells based on game state
-        for (let y = 0; y < this.GRID_HEIGHT; y++) {
-            for (let x = 0; x < this.GRID_WIDTH; x++) {
-                const cell = grid.querySelector(`.grid-cell[data-x="${x}"][data-y="${y}"]`);
+        // Cache all cells in a map for O(1) lookup
+        const cells = new Map();
+        grid.querySelectorAll('.grid-cell').forEach(cell => {
+            cells.set(`${cell.dataset.x},${cell.dataset.y}`, cell);
+        });
+
+        // Pre-fetch all player colors to avoid multiple async calls
+        const playerColors = new Map();
+        const uniqueUsernames = new Set([...MinesweeperDB.mines.markers.values()].map(m => m.username));
+        await Promise.all([...uniqueUsernames].map(async username => {
+            const player = await MockDB.getPlayer(username);
+            if (player) {
+                playerColors.set(username, player.color);
+            }
+        }));
+
+        // Batch all DOM updates
+        const updates = [];
+        for (let y = 0; y < MinesweeperDB.gridHeight; y++) {
+            for (let x = 0; x < MinesweeperDB.gridWidth; x++) {
+                const key = `${x},${y}`;
+                const cell = cells.get(key);
                 if (!cell) continue;
 
-                const key = `${x},${y}`;
+                // Prepare update without touching DOM
+                const update = {
+                    cell,
+                    className: 'grid-cell',
+                    innerHTML: '',
+                    style: { color: '', backgroundColor: '' }
+                };
 
-                // Reset cell to default state
-                cell.className = 'grid-cell';
-                cell.innerHTML = '';
-                cell.style.color = '';
-                cell.style.backgroundColor = '';
-
-                // Check if cell is revealed
                 if (MinesweeperDB.mines.revealed.has(key)) {
                     if (MinesweeperDB.isMine(x, y)) {
-                        cell.innerHTML = '💣';
-                        cell.classList.add('revealed', 'mine');
+                        update.innerHTML = '💣';
+                        update.className += ' revealed mine';
                     } else {
                         const count = MinesweeperDB.getAdjacentMines(x, y);
-                        cell.innerHTML = count || '';
-                        cell.classList.add('revealed', count ? `adjacent-${count}` : 'empty');
+                        update.innerHTML = count || '';
+                        update.className += ' revealed' + (count ? ` adjacent-${count}` : ' empty');
                     }
                 } else {
-                    // Check if cell is marked
                     const marker = MinesweeperDB.mines.markers.get(key);
                     if (marker) {
-                        cell.innerHTML = marker.avatar;
-                        const player = await MockDB.getPlayer(marker.username);
-                        if (player) {
-                            cell.style.color = player.color;
-                        }
+                        update.innerHTML = marker.avatar;
+                        update.style.color = playerColors.get(marker.username) || '';
                     }
                 }
+                updates.push(update);
             }
         }
+
+        // Apply all DOM updates in a single batch
+        requestAnimationFrame(() => {
+            updates.forEach(update => {
+                update.cell.className = update.className;
+                update.cell.innerHTML = update.innerHTML;
+                update.cell.style.color = update.style.color;
+                update.cell.style.backgroundColor = update.style.backgroundColor;
+            });
+        });
 
         // Update score
         const scoreElement = document.querySelector('.player-score');
@@ -200,8 +227,8 @@ const PlayScreen = {
         const gameContainer = document.querySelector('.game-container');
         const grid = document.querySelector('.game-grid');
         if (gameContainer && grid) {
-            const gridWidth = this.GRID_WIDTH * this.CELL_SIZE;
-            const gridHeight = this.GRID_HEIGHT * this.CELL_SIZE;
+            const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE;
+            const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE;
 
             // Calculate the center position
             this.offsetX = (gameContainer.clientWidth - gridWidth * this.zoom) / 2;

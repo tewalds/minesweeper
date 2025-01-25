@@ -141,6 +141,24 @@
                 "x": 0,
                 "y": 0
             }
+        },
+        "player_Zupps2": {
+            "username": "Zupps2",
+            "avatar": "🌙",
+            "color": "#94FF4D",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
+        },
+        "player_Zupps33": {
+            "username": "Zupps33",
+            "avatar": "🗻",
+            "color": "#CCCCFF",
+            "position": {
+                "x": -3,
+                "y": 1
+            }
         }
     }
 }

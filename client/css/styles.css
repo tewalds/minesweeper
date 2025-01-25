@@ -222,8 +222,8 @@ button:disabled {
 .game-grid {
     position: absolute;
     display: grid;
-    grid-template-columns: repeat(80, 25px);
-    grid-template-rows: repeat(40, 25px);
+    grid-auto-rows: var(--cell-size);
+    grid-auto-columns: var(--cell-size);
     transform-origin: center;
     transition: transform 0.1s ease-out;
 }
@@ -239,6 +239,9 @@ button:disabled {
     font-weight: bold;
     user-select: none;
     position: relative;
+    width: var(--cell-size);
+    height: var(--cell-size);
+    box-sizing: border-box;
 }
 
 .grid-cell:hover {
