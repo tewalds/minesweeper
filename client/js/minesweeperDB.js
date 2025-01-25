@@ -1,24 +1,29 @@
 const MinesweeperDB = {
     mines: null,
     fileHandle: null,
+    minePositionMap: null, // For O(1) mine lookup
 
     // Initialize with 15% mines
     generateMines: function (gridWidth, gridHeight) {
         const totalCells = gridWidth * gridHeight;
         const mineCount = Math.floor(totalCells * 0.15);
         const positions = [];
+        const positionMap = new Set(); // Track taken positions
 
         while (positions.length < mineCount) {
             const x = Math.floor(Math.random() * gridWidth);
             const y = Math.floor(Math.random() * gridHeight);
             const pos = `${x},${y}`;
 
-            // Check if position is already taken
-            if (!positions.some(p => p.x === x && p.y === y)) {
+            // Check if position is already taken using Set
+            if (!positionMap.has(pos)) {
                 positions.push({ x, y });
+                positionMap.add(pos);
             }
         }
 
+        // Create mine position map
+        this.minePositionMap = new Set(positions.map(p => `${p.x},${p.y}`));
         return positions;
     },
 
@@ -77,6 +82,8 @@ const MinesweeperDB = {
                         await this.saveMines();
                     } else {
                         this.mines = data.mines;
+                        // Rebuild mine position map
+                        this.minePositionMap = new Set(this.mines.positions.map(p => `${p.x},${p.y}`));
                         // Ensure default players have scores
                         if (!this.mines.scores) {
                             this.mines.scores = this.defaultScores;
@@ -155,8 +162,7 @@ const MinesweeperDB = {
     },
 
     isMine: function (x, y) {
-        if (!this.isValidPosition(x, y)) return false;
-        return this.mines.positions.some(p => p.x === x && p.y === y);
+        return this.minePositionMap.has(`${x},${y}`);
     },
 
     getAdjacentMines: function (x, y) {
@@ -176,36 +182,62 @@ const MinesweeperDB = {
         return count;
     },
 
+    // Optimized reveal using queue-based flood fill
     revealCell: async function (x, y, username) {
         if (!this.isValidPosition(x, y)) return false;
 
         const key = `${x},${y}`;
         if (this.mines.revealed[key]) return false;
 
-        this.mines.revealed[key] = true;
+        // Track all cells to reveal
+        const cellsToReveal = new Set();
+        const queue = [[x, y]];
 
-        // If it's a mine, reset score
-        if (this.isMine(x, y)) {
-            this.mines.scores[username] = 0;
-        } else {
-            // Increment score
-            this.mines.scores[username] = (this.mines.scores[username] || 0) + 1;
+        // Flood fill to find all cells to reveal
+        while (queue.length > 0) {
+            const [currX, currY] = queue.shift();
+            const currKey = `${currX},${currY}`;
 
-            // If empty cell, reveal neighbors
-            if (this.getAdjacentMines(x, y) === 0) {
+            // Skip if already processed
+            if (cellsToReveal.has(currKey)) continue;
+
+            // Add to reveal set
+            cellsToReveal.add(currKey);
+
+            // If it's an empty cell, add neighbors to queue
+            if (!this.isMine(currX, currY) && this.getAdjacentMines(currX, currY) === 0) {
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         if (dx === 0 && dy === 0) continue;
-                        const newX = x + dx;
-                        const newY = y + dy;
-                        if (this.isValidPosition(newX, newY)) {
-                            await this.revealCell(newX, newY, username);
+                        const newX = currX + dx;
+                        const newY = currY + dy;
+                        const newKey = `${newX},${newY}`;
+                        if (this.isValidPosition(newX, newY) && !this.mines.revealed[newKey] && !cellsToReveal.has(newKey)) {
+                            queue.push([newX, newY]);
                         }
                     }
                 }
             }
         }
 
+        // Apply all reveals at once
+        let scoreIncrement = 0;
+        for (const cellKey of cellsToReveal) {
+            this.mines.revealed[cellKey] = true;
+            // Only increment score for non-mine cells
+            if (!this.isMine(...cellKey.split(',').map(Number))) {
+                scoreIncrement++;
+            }
+        }
+
+        // Update score
+        if (this.isMine(x, y)) {
+            this.mines.scores[username] = 0;
+        } else {
+            this.mines.scores[username] = (this.mines.scores[username] || 0) + scoreIncrement;
+        }
+
+        // Save only once after all reveals
         await this.saveMines();
         return true;
     },
