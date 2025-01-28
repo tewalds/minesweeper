@@ -46,29 +46,42 @@ auto COLORS = std::array<sf::Color, 12>{
   sf::Color(  0,   0,   0),  // Mark: black
 };
 
-auto NEIGHBORS = std::array<std::tuple<int, int>, 9>{{
-    {-1, -1}, {-1, 0}, {-1, 1},
-    { 0, -1}, { 0, 0}, { 0, 1},
-    { 1, -1}, { 1, 0}, { 1, 1},
-}};
 
-class neighbors {
+struct Point { int x, y; };
+
+class Neighbors {
  public:
-  neighbors(int x, int y, int width, int height) : count(0) {
-    for (auto [dx, dy] : NEIGHBORS) {
-      int nx = x + dx;
-      int ny = y + dy;
-      if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-        neighbors_[count++] = {nx, ny};
-      }
+  Neighbors(int x, int y, int width, int height) : count(0) {
+    int xm = x - 1;
+    int xp = x + 1;
+    int ym = y - 1;
+    int yp = y + 1;
+    if (xm >= 0) {
+      if (ym >= 0)
+        neighbors_[count++] = {xm, ym};
+      neighbors_[count++] = {xm, y};
+      if (yp < height)
+        neighbors_[count++] = {xm, yp};
+    }
+    if (ym >= 0)
+      neighbors_[count++] = {x, ym};
+    neighbors_[count++] = {x, y};
+    if (yp < height)
+      neighbors_[count++] = {x, yp};
+    if (xp < width) {
+      if (ym >= 0)
+        neighbors_[count++] = {xp, ym};
+      neighbors_[count++] = {xp, y};
+      if (yp < height)
+        neighbors_[count++] = {xp, yp};
     }
   }
 
-  std::tuple<int, int>* begin() { return neighbors_; }
-  std::tuple<int, int>* end()   { return neighbors_ + count; }
+  Point* begin() { return neighbors_; }
+  Point* end()   { return neighbors_ + count; }
 
  private:
-  std::tuple<int, int> neighbors_[NEIGHBORS.size()];
+  Point neighbors_[9];
   int count;
 };
 
@@ -171,7 +184,7 @@ class Env {
       int y = absl::Uniform(bitgen_, 0, height_);
 
       int b = 0;
-      for (auto [nx, ny] : neighbors(x, y, width_, height_)) {
+      for (auto [nx, ny] : Neighbors(x, y, width_, height_)) {
         b += state_(nx, ny).bomb;
       }
       if (b == 0) {
@@ -221,7 +234,8 @@ class Env {
           } else {
             // Compute and reveal the true value
             int b = 0;
-            for (auto [nx, ny] : neighbors(a.x, a.y, width_, height_)) {
+            Neighbors neighbors(a.x, a.y, width_, height_);
+            for (auto [nx, ny] : neighbors) {
               b += state_(nx, ny).bomb;
             }
             CellState c = CellState(b);
@@ -230,7 +244,7 @@ class Env {
 
             // Propagate to the neighbors.
             if (c == ZERO) {
-              for (auto [nx, ny] : neighbors(a.x, a.y, width_, height_)) {
+              for (auto [nx, ny] : neighbors) {
                 if (state_(nx, ny).state == HIDDEN) {
                   q.push_back({OPEN, nx, ny, 0});
                 }
@@ -292,12 +306,13 @@ class Agent {
 
     // Compute the resulting valid actions.
     for (auto u : updates) {
-      for (auto [nx, ny] : neighbors(u.x, u.y, width_, height_)) {
+      for (auto [nx, ny] : Neighbors(u.x, u.y, width_, height_)) {
         CellState ns = state_(nx, ny);
         if (ns != HIDDEN) {
           int hidden = 0;
           int marked = 0;
-          for (auto [nnx, nny] : neighbors(nx, ny, width_, height_)) {
+          Neighbors neighbors(nx, ny, width_, height_);
+          for (auto [nnx, nny] : neighbors) {
             if (state_(nnx, nny) == HIDDEN) {
               hidden += 1;
             } else if (state_(nnx, nny) == MARKED) {
@@ -319,7 +334,7 @@ class Agent {
             continue;  // Still unknown.
           }
 
-          for (auto [nnx, nny] : neighbors(nx, ny, width_, height_)) {
+          for (auto [nnx, nny] : neighbors) {
             if (state_(nnx, nny) == HIDDEN) {
               // actions_.push_back({act, nnx, nny, user_});
               actions_.insert({int(act), {{nnx, nny}}});
@@ -400,7 +415,7 @@ int main(int argc, char **argv) {
   int target_fps = absl::GetFlag(FLAGS_fps);
   int apf = absl::GetFlag(FLAGS_apf);
   if (apf == 0) {
-    apf = std::sqrt(width * height);
+    apf = std::sqrt(width * height) / absl::GetFlag(FLAGS_agents);
   }
 
   std::cout << absl::StrFormat("grid: %ix%i, actions per frame: %i\n", width, height, apf);

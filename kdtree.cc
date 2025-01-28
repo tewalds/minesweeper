@@ -31,6 +31,15 @@ void KDTree::clear() {
 }
 
 bool KDTree::insert(Value v) {
+  if (sum_depth > std::bit_width((unsigned)count) * count) {
+    // `bit_width(count)` is the max depth for a complete balanced tree.
+    // `sum_depth / count` is the average depth, which should be a 1-2 less than the max for a
+    // balanced tree, but will exceed that if it's suffiently unbalanced.
+    // Move `/ count` to the other side to avoid division, in particular by 0.
+    // There may be better metrics for how balanced a tree is, but this one is cheap and easy to
+    // compute incrementally and seems to work.
+    rebalance();
+  }
   return insert(root, v, 0);
 }
 
@@ -39,10 +48,6 @@ bool KDTree::insert(std::unique_ptr<Node> &node, const Value &v, int depth) {
     node = std::make_unique<Node>(v, depth);
     count += 1;
     sum_depth += depth;
-
-    if (float(sum_depth) / count > std::bit_width((unsigned)count) * 1.2) {
-      rebalance();
-    }
     return true;
   }
 
@@ -96,7 +101,7 @@ KDTree::Value KDTree::find_closest(int x, int y) {
 void KDTree::find_closest(
     std::unique_ptr<Node> *node, int coords[], int &best_dist,
     std::unique_ptr<Node> *&best_node) const {
-  if (!node || !*node) return;
+  if (!*node) return;
 
   int dist = distance(coords, (*node)->value.coords);
   // std::cout << "dist: " << dist << " " << (*node)->value << "\n";
@@ -116,7 +121,7 @@ void KDTree::find_closest(
 void KDTree::find_closest_along_axis(
     std::unique_ptr<Node> *node, int coord, int axis, int &best_dist,
     std::unique_ptr<Node> *&best_node) const {
-  if (!node || !*node) return;
+  if (!*node) return;
 
   int dist = std::abs(coord - (*node)->value.coords[axis]);
   if (dist < best_dist) {
