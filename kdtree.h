@@ -42,8 +42,8 @@ class KDTree {
   int sum_depth;
 
   static int distance(const int a[2], const int b[2]) {
-    // return (a[0] - b[0]) + (a[1] - b[1]);  // manhattan distance
-    return (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]);
+    return std::abs(a[0] - b[0]) + std::abs(a[1] - b[1]);  // manhattan distance
+    // return (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]);
   }
 
   bool insert(std::unique_ptr<Node> &node, const Value &v, int depth);
