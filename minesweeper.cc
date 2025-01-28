@@ -354,7 +354,9 @@ class Agent {
     // }
 
     while (!actions_.empty()) {
-      KDTree::Value a = actions_.pop_closest(rolling_action_.x, rolling_action_.y);
+      KDTree::Value a = actions_.pop_closest(
+          // Rounding fixes a systematic bias towards the top left from truncating.
+          std::round(rolling_action_.x), std::round(rolling_action_.y));
       if (state_(a.x, a.y) == HIDDEN) {
         return {ActionType(a.value), a.x, a.y, user_};
       }
