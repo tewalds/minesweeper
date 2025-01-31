@@ -21,6 +21,7 @@
 #include "absl/strings/str_format.h"
 
 #include "kdtree.h"
+#include "point.h"
 
 ABSL_FLAG(float, mines, 0.16, "Mines percentage");
 ABSL_FLAG(int, px_size, 20, "Pixel size");
@@ -47,41 +48,39 @@ auto COLORS = std::array<sf::Color, 12>{
 };
 
 
-struct Point { int x, y; };
-
 class Neighbors {
  public:
-  Neighbors(int x, int y, int width, int height) : count(0) {
-    int xm = x - 1;
-    int xp = x + 1;
-    int ym = y - 1;
-    int yp = y + 1;
+  Neighbors(Pointi p, Pointi dims) : count(0) {
+    int xm = p.x - 1;
+    int xp = p.x + 1;
+    int ym = p.y - 1;
+    int yp = p.y + 1;
     if (xm >= 0) {
       if (ym >= 0)
         neighbors_[count++] = {xm, ym};
-      neighbors_[count++] = {xm, y};
-      if (yp < height)
+      neighbors_[count++] = {xm, p.y};
+      if (yp < dims.y)
         neighbors_[count++] = {xm, yp};
     }
     if (ym >= 0)
-      neighbors_[count++] = {x, ym};
-    neighbors_[count++] = {x, y};
-    if (yp < height)
-      neighbors_[count++] = {x, yp};
-    if (xp < width) {
+      neighbors_[count++] = {p.x, ym};
+    neighbors_[count++] = {p.x, p.y};
+    if (yp < dims.y)
+      neighbors_[count++] = {p.x, yp};
+    if (xp < dims.x) {
       if (ym >= 0)
         neighbors_[count++] = {xp, ym};
-      neighbors_[count++] = {xp, y};
-      if (yp < height)
+      neighbors_[count++] = {xp, p.y};
+      if (yp < dims.y)
         neighbors_[count++] = {xp, yp};
     }
   }
 
-  Point* begin() { return neighbors_; }
-  Point* end()   { return neighbors_ + count; }
+  Pointi* begin() { return neighbors_; }
+  Pointi* end()   { return neighbors_ + count; }
 
  private:
-  Point neighbors_[9];
+  Pointi neighbors_[9];
   int count;
 };
 
@@ -89,29 +88,26 @@ class Neighbors {
 template<class T>
 class Array2D {
  public:
-  Array2D(int width, int height) : width_(width), height_(height) {
-    array.resize(width * height);
+  Array2D(Pointi dims) : dims_(dims) {
+    array.resize(dims_.x * dims_.y);
   }
 
-  T& operator()(int x, int y) {
-    return array[y * width_ + x];
-  }
-  const T& operator()(int x, int y) const {
-    return array[y * width_ + x];
-  }
+  T& operator[](Pointi p) {                return array[p.y * dims_.x + p.x]; }
+  const T& operator[](Pointi p) const {    return array[p.y * dims_.x + p.x]; }
+  T& operator()(int x, int y) {             return array[y * dims_.x + x]; }
+  const T& operator()(int x, int y) const { return array[y * dims_.x + x]; }
 
   void fill(const T& v) {
-    for (int i = 0; i < width_ * height_; i++) {
+    for (int i = 0; i < dims_.x * dims_.y; i++) {
       array[i] = v;
     }
   }
-  int width() const { return width_; }
-  int height() const { return height_; }
-  int size() const { return width_ * height_; }
+  int width() const { return dims_.x; }
+  int height() const { return dims_.y; }
+  int size() const { return dims_.x * dims_.y; }
 
  private:
-  int width_;
-  int height_;
+  Pointi dims_;
   std::vector<T> array;
 };
 
@@ -145,8 +141,7 @@ enum ActionType {
 
 struct Action {
   ActionType action;
-  int x;
-  int y;
+  Pointi point;
   int user;
   bool operator==(const Action&) const = default;
   bool operator!=(const Action&) const = default;
@@ -154,23 +149,22 @@ struct Action {
 
 struct Update {
   CellState state;
-  int x;
-  int y;
+  Pointi point;
   int user;
 };
 
 class Env {
  public:
-  Env(int width, int height, float bomb_percentage) :
-      width_(width), height_(height), bomb_percentage_(bomb_percentage),
-      state_(width, height) {
+  Env(Pointi dims, float bomb_percentage) :
+      dims_(dims), bomb_percentage_(bomb_percentage),
+      state_(dims) {
     assert(bomb_percentage > 0. && bomb_percentage < 1.);
   }
 
   std::vector<Update> reset() {
     // Generate random bombs
-    for (int x = 0; x < width_; x++) {
-      for (int y = 0; y < height_; y++) {
+    for (int x = 0; x < dims_.x; x++) {
+      for (int y = 0; y < dims_.y; y++) {
         state_(x, y).state = HIDDEN;
         state_(x, y).bomb = (absl::Uniform(bitgen_, 0.0, 1.0) < bomb_percentage_);
         state_(x, y).user = 0;
@@ -180,15 +174,16 @@ class Env {
 
     // Find an empty place to start.
     while (true) {
-      int x = absl::Uniform(bitgen_, 0, width_);
-      int y = absl::Uniform(bitgen_, 0, height_);
+      Pointi p(
+          absl::Uniform(bitgen_, 0, dims_.x),
+          absl::Uniform(bitgen_, 0, dims_.y));
 
       int b = 0;
-      for (auto [nx, ny] : Neighbors(x, y, width_, height_)) {
-        b += state_(nx, ny).bomb;
+      for (Pointi n : Neighbors(p, dims_)) {
+        b += state_[n].bomb;
       }
       if (b == 0) {
-        return step(Action{OPEN, x, y, 0});
+        return step(Action{OPEN, p, 0});
       }
     }
   }
@@ -201,57 +196,58 @@ class Env {
     while (!q.empty()) {
       Action a = q.back();
       q.pop_back();
-      // std::cout << absl::StrFormat("Env.step: got Action(%i, %i, %i, %i)", a.action, a.x, a.y, a.user) << std::endl;
+      // std::cout << absl::StrFormat("Env.step: got Action(%i, %i, %i, %i)", 
+      //                              a.action, a.point.x, a.point.y, a.user) << std::endl;
       if (a.action == MARK) {
-        if (!state_(a.x, a.y).bomb) {
+        if (!state_[a.point].bomb) {
           // TODO(tewalds): remove?
-          std::cout << absl::StrFormat("Bad mark: %i, %i\n", a.x, a.y);
+          std::cout << absl::StrFormat("Bad mark: %i, %i\n", a.point.x, a.point.y);
           continue;
         }
-        if (state_(a.x, a.y).state == MARKED) {
-          if (state_(a.x, a.y).user == a.user) {
+        if (state_[a.point].state == MARKED) {
+          if (state_[a.point].user == a.user) {
             // I marked it, so unmark.
-            state_(a.x, a.y).state = HIDDEN;
-            state_(a.x, a.y).user = 0;
-            updates.push_back({HIDDEN, a.x, a.y, a.user});
+            state_[a.point].state = HIDDEN;
+            state_[a.point].user = 0;
+            updates.push_back({HIDDEN, a.point, a.user});
           } else {
             // Someone else marked, so replace it with my mark.
-            state_(a.x, a.y).user = a.user;
-            updates.push_back({MARKED, a.x, a.y, a.user});
+            state_[a.point].user = a.user;
+            updates.push_back({MARKED, a.point, a.user});
           }
-        } else if (state_(a.x, a.y).state == HIDDEN) {
+        } else if (state_[a.point].state == HIDDEN) {
           // Mark it.
-          state_(a.x, a.y).state = MARKED;
-          state_(a.x, a.y).user = a.user;
-          updates.push_back({MARKED, a.x, a.y, a.user});
+          state_[a.point].state = MARKED;
+          state_[a.point].user = a.user;
+          updates.push_back({MARKED, a.point, a.user});
         } else {
           // std::cout << "Invalid mark action, already open\n";
         }
       } else if (a.action == OPEN) {
-        if (state_(a.x, a.y).state == HIDDEN) {
-          if (state_(a.x, a.y).bomb) {
+        if (state_[a.point].state == HIDDEN) {
+          if (state_[a.point].bomb) {
             std::cout << "BOOOM" << std::endl;  // TODO: remove?
           } else {
             // Compute and reveal the true value
             int b = 0;
-            Neighbors neighbors(a.x, a.y, width_, height_);
-            for (auto [nx, ny] : neighbors) {
-              b += state_(nx, ny).bomb;
+            Neighbors neighbors(a.point, dims_);
+            for (Pointi n : neighbors) {
+              b += state_[n].bomb;
             }
             CellState c = CellState(b);
-            state_(a.x, a.y).state = c;
-            updates.push_back({c, a.x, a.y, a.user});
+            state_[a.point].state = c;
+            updates.push_back({c, a.point, a.user});
 
             // Propagate to the neighbors.
             if (c == ZERO) {
-              for (auto [nx, ny] : neighbors) {
-                if (state_(nx, ny).state == HIDDEN) {
-                  q.push_back({OPEN, nx, ny, 0});
+              for (Pointi n : neighbors) {
+                if (state_[n].state == HIDDEN) {
+                  q.push_back({OPEN, n, 0});
                 }
               }
             }
           }
-        } else if (state_(a.x, a.y).state == MARKED) {
+        } else if (state_[a.point].state == MARKED) {
           // std::cout << "Invalid open action, already marked\n";
         } else if (a.user != 0) {
           // std::cout << "Invalid open action, already open\n";
@@ -266,8 +262,7 @@ class Env {
   }
 
  private:
-  int width_;
-  int height_;
+  Pointi dims_;
   float bomb_percentage_;
   Array2D<Cell> state_;
   absl::BitGen bitgen_;
@@ -276,8 +271,8 @@ class Env {
 
 class Agent {
  public:
-  Agent(int width, int height, int user)
-      : width_(width), height_(height), user_(user), state_(width, height) {
+  Agent(Pointi dims, int user)
+      : dims_(dims), user_(user), state_(dims) {
     reset();
   }
 
@@ -286,36 +281,37 @@ class Agent {
     actions_.clear();
     rolling_action_ = {
         // Encourage it to start heading in a random direction. Forces agents to diverge.
-        absl::Uniform(bitgen_, 0.0f, float(width_)),
-        absl::Uniform(bitgen_, 0.0f, float(height_)),
+        absl::Uniform(bitgen_, 0.0f, float(dims_.x)),
+        absl::Uniform(bitgen_, 0.0f, float(dims_.y)),
     };
   }
 
   Action step(const std::vector<Update>& updates) {
     // Update state.
     for (auto u : updates) {
-      // std::cout << absl::StrFormat("Agent.step: got Update(%i, %i, %i, %i)", u.state, u.x, u.y, u.user) << std::endl;
-      state_(u.x, u.y) = u.state;
+      // std::cout << absl::StrFormat("Agent.step: got Update(%i, %i, %i, %i)", 
+      //                              u.state, u.point.x, u.point.y, u.user) << std::endl;
+      state_[u.point] = u.state;
       if (u.user == user_) {
         constexpr float decay = 0.05;  // Controls how fast it moves away from the last action.
-        rolling_action_.x = rolling_action_.x * (1. - decay) + u.x * decay;
-        rolling_action_.y = rolling_action_.y * (1. - decay) + u.y * decay;
+        rolling_action_.x = rolling_action_.x * (1. - decay) + u.point.x * decay;
+        rolling_action_.y = rolling_action_.y * (1. - decay) + u.point.y * decay;
       }
-      actions_.remove(u.x, u.y);
+      actions_.remove(u.point);
     }
 
     // Compute the resulting valid actions.
     for (auto u : updates) {
-      for (auto [nx, ny] : Neighbors(u.x, u.y, width_, height_)) {
-        CellState ns = state_(nx, ny);
+      for (Pointi n : Neighbors(u.point, dims_)) {
+        CellState ns = state_[n];
         if (ns != HIDDEN) {
           int hidden = 0;
           int marked = 0;
-          Neighbors neighbors(nx, ny, width_, height_);
-          for (auto [nnx, nny] : neighbors) {
-            if (state_(nnx, nny) == HIDDEN) {
+          Neighbors neighbors(n, dims_);
+          for (Pointi nn : neighbors) {
+            if (state_[nn] == HIDDEN) {
               hidden += 1;
-            } else if (state_(nnx, nny) == MARKED) {
+            } else if (state_[nn] == MARKED) {
               marked += 1;
             }
           }
@@ -334,10 +330,10 @@ class Agent {
             continue;  // Still unknown.
           }
 
-          for (auto [nnx, nny] : neighbors) {
-            if (state_(nnx, nny) == HIDDEN) {
-              // actions_.push_back({act, nnx, nny, user_});
-              actions_.insert({int(act), {{nnx, nny}}});
+          for (Pointi nn : neighbors) {
+            if (state_[nn] == HIDDEN) {
+              // actions_.push_back({act, nn, user_});
+              actions_.insert({int(act), nn});
             }
           }
         }
@@ -351,9 +347,9 @@ class Agent {
     //   actions_[i] = actions_.back();
     //   // Action a = actions_.back();
     //   actions_.pop_back();
-    //   if (state_(a.x, a.y) == HIDDEN) {
+    //   if (state[a.point] == HIDDEN) {
     //     // std::cout << absl::StrFormat("send Action(%i, %i, %i, %i)",
-    //     //     action.action, action.x, action.y, action.user) << std::endl;
+    //     //     action.action, action.point.x, action.point.y, action.user) << std::endl;
     //     return a;
     //   }
     // }
@@ -371,27 +367,24 @@ class Agent {
     while (!actions_.empty()) {
       KDTree::Value a = actions_.pop_closest(
           // Rounding fixes a systematic bias towards the top left from truncating.
-          std::round(rolling_action_.x), std::round(rolling_action_.y));
-      if (state_(a.x, a.y) == HIDDEN) {
-        return {ActionType(a.value), a.x, a.y, user_};
+          {int(std::round(rolling_action_.x)),
+           int(std::round(rolling_action_.y))});
+      if (state_[a.p] == HIDDEN) {
+        return {ActionType(a.value), a.p, user_};
       }
     }
 
     // std::cout << "send PASS\n";
-    return Action{PASS, 0, 0, user_};
+    return Action{PASS, {0, 0}, user_};
   }
 
  private:
-  int width_;
-  int height_;
+  Pointi dims_;
   int user_;
   Array2D<CellState> state_;
   // std::vector<Action> actions_;
   KDTree actions_;
-  struct {
-    float x;
-    float y;
-  } rolling_action_;
+  Pointf rolling_action_;
   absl::BitGen bitgen_;
 };
 
@@ -440,18 +433,18 @@ int main(int argc, char **argv) {
   auto bench_start = std::chrono::steady_clock::now();
   long long bench_actions = 0;
 
-  Env env(width, height, absl::GetFlag(FLAGS_mines));
+  Env env({width, height}, absl::GetFlag(FLAGS_mines));
   std::vector<Update> updates = env.reset();
 
   std::vector<Agent> agents;
   for (int i = 0; i < absl::GetFlag(FLAGS_agents); i++) {
-    agents.emplace_back(width, height, i+1);
+    agents.emplace_back(Pointi(width, height), i+1);
   }
 
   sf::Image image;
   image.create(width, height, COLORS[HIDDEN]);
   for (Update u : updates) {
-    image.setPixel(u.x, u.y, COLORS[u.state]);
+    image.setPixel(u.point.x, u.point.y, COLORS[u.state]);
   }
   assert(texture.loadFromImage(image));
   rect.setTexture(&texture, true);
@@ -486,7 +479,7 @@ int main(int argc, char **argv) {
               image.create(width, height, COLORS[HIDDEN]);
               updates = env.reset();
               for (Update u : updates) {
-                image.setPixel(u.x, u.y, COLORS[u.state]);
+                image.setPixel(u.point.x, u.point.y, COLORS[u.state]);
               }
               for (Agent& agent : agents) {
                 agent.reset();
@@ -501,19 +494,19 @@ int main(int argc, char **argv) {
         case sf::Event::MouseButtonPressed: {
           int x = event.mouseButton.x / px_size;
           int y = event.mouseButton.y / px_size;
-          Action action = {PASS, x, y, 0};
+          Action action = {PASS, {x, y}, 0};
           if (event.mouseButton.button == sf::Mouse::Button::Left) {
-            action = {OPEN, x, y, 0};
+            action = {OPEN, {x, y}, 0};
           } else if (event.mouseButton.button == sf::Mouse::Button::Right) {
-            action = {MARK, x, y, 0};
+            action = {MARK, {x, y}, 0};
           } else {
             std::cout << absl::StrFormat("Kick: %i, %i\n", x, y);
-            updates.push_back({env.state()(x, y).state, x, y, 0});
+            updates.push_back({env.state()(x, y).state, {x, y}, 0});
           }
           if (action.action != PASS) {
             for (Update u : env.step(action)) {
               updates.push_back(u);
-              image.setPixel(u.x, u.y, COLORS[u.state]);
+              image.setPixel(u.point.x, u.point.y, COLORS[u.state]);
             }
           }
           break;
@@ -537,7 +530,7 @@ int main(int argc, char **argv) {
             finished = false;
             for (Update u : env.step(a)) {
               updates.push_back(u);
-              image.setPixel(u.x, u.y, COLORS[u.state]);
+              image.setPixel(u.point.x, u.point.y, COLORS[u.state]);
             }
           }
         }

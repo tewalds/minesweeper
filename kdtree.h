@@ -1,5 +1,6 @@
 #include <memory>
 
+#include "point.h"
 
 class KDTree {
  public:
@@ -7,10 +8,7 @@ class KDTree {
 
   struct Value {
     int value;
-    union {
-      int coords[2];
-      struct { int x, y; };
-    };
+    Pointi p;
   };
 
   bool empty() const;
@@ -18,9 +16,9 @@ class KDTree {
   void clear();
 
   bool insert(Value v);
-  bool remove(int x, int y);
-  Value find_closest(int x, int y);
-  Value pop_closest(int x, int y);
+  bool remove(Pointi p);
+  Value find_closest(Pointi p);
+  Value pop_closest(Pointi p);
   void print_tree() const;
   bool validate() const;
   void rebalance();
@@ -41,15 +39,15 @@ class KDTree {
   int count;
   int sum_depth;
 
-  static int distance(const int a[2], const int b[2]) {
-    return std::abs(a[0] - b[0]) + std::abs(a[1] - b[1]);  // manhattan distance
-    // return (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]);
+  static int distance(Pointi a, Pointi b) {
+    return std::abs(a.x - b.x) + std::abs(a.y - b.y);  // manhattan distance
+    // return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
   }
 
   bool insert(std::unique_ptr<Node> &node, const Value &v, int depth);
-  bool remove(std::unique_ptr<Node> &node, int coords[]);
+  bool remove(std::unique_ptr<Node> &node, Pointi p);
   void find_closest(
-      std::unique_ptr<Node> *node, int coords[], int &best_dist,
+      std::unique_ptr<Node> *node, Pointi p, int &best_dist,
       std::unique_ptr<Node> *&best_node) const;
   void find_closest_along_axis(
       std::unique_ptr<Node> *node, int coord, int axis, int &best_dist,
