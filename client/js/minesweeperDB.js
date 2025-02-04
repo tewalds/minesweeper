@@ -2,8 +2,8 @@ const MinesweeperDB = {
     mines: null,
     fileHandle: null,
     minePositionMap: null,
-    gridWidth: 100,
-    gridHeight: 100,
+    gridWidth: 1000,
+    gridHeight: 1000,
 
     // Initialize with 15% mines
     generateMines: function (gridWidth, gridHeight) {

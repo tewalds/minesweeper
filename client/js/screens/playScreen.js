@@ -2,10 +2,13 @@ const PlayScreen = {
     CELL_SIZE: 25, // pixels
     UPDATE_INTERVAL: 2000, // 2 seconds
     MAX_ZOOM: 2.0, // 200% maximum zoom
+    MIN_ZOOM_CAP: 0.5, // Never zoom out beyond 50%
     BASE_MOVE_SPEED: 20, // Base speed for keyboard movement
     BASE_ZOOM_SPEED: 0.1, // Base speed for zooming
     EDGE_SCROLL_THRESHOLD: 20, // Pixels from edge to trigger scrolling
     EDGE_SCROLL_SPEED: 15, // Base speed for edge scrolling
+    RENDER_MARGIN: 2, // Extra cells to render beyond viewport
+    CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
     updateInterval: null,
     isDragging: false,
     lastX: 0,
@@ -17,6 +20,9 @@ const PlayScreen = {
     moveAnimationFrame: null, // Track animation frame for movement
     zoomAnimationFrame: null, // Track animation frame for zooming
     activeZoom: null, // Direction of active zoom (1 for in, -1 for out, null for none)
+    cellPool: [], // Pool of reusable cell elements
+    visibleCells: new Map(), // Currently visible cells
+    cellUpdateQueued: false, // Prevent multiple concurrent updates
 
     // Calculate minimum zoom to ensure grid fills viewport
     calculateMinZoom: function (containerWidth, containerHeight) {
@@ -28,7 +34,8 @@ const PlayScreen = {
         const zoomHeight = containerHeight / gridHeight;
 
         // Use the larger zoom to ensure grid fills viewport in both dimensions
-        return Math.max(zoomWidth, zoomHeight);
+        // But never go below MIN_ZOOM_CAP
+        return Math.max(Math.max(zoomWidth, zoomHeight), this.MIN_ZOOM_CAP);
     },
 
     // Clamp offset values to keep grid in bounds
@@ -102,13 +109,8 @@ const PlayScreen = {
     },
 
     createGrid: function () {
-        let grid = '';
-        for (let y = 0; y < MinesweeperDB.gridHeight; y++) {
-            for (let x = 0; x < MinesweeperDB.gridWidth; x++) {
-                grid += `<div class="grid-cell" data-x="${x}" data-y="${y}"></div>`;
-            }
-        }
-        return grid;
+        // No longer need to create all cells upfront
+        return '';
     },
 
     getPlayerDirection: function (playerX, playerY) {
@@ -185,78 +187,11 @@ const PlayScreen = {
 
     renderMinesweeperState: async function () {
         const grid = document.querySelector('.game-grid');
-        if (!grid) {
-            console.error('Game grid not found');
-            return;
-        }
+        const container = document.querySelector('.game-container');
+        if (!grid || !container) return;
 
-        // Safety check for mines data
-        if (!MinesweeperDB.mines) {
-            console.error('Mines data not loaded');
-            return;
-        }
-
-        // Cache all cells in a map for O(1) lookup
-        const cells = new Map();
-        grid.querySelectorAll('.grid-cell').forEach(cell => {
-            cells.set(`${cell.dataset.x},${cell.dataset.y}`, cell);
-        });
-
-        // Pre-fetch all player colors to avoid multiple async calls
-        const playerColors = new Map();
-        const uniqueUsernames = new Set([...MinesweeperDB.mines.markers.values()].map(m => m.username));
-        await Promise.all([...uniqueUsernames].map(async username => {
-            const player = await MockDB.getPlayer(username);
-            if (player) {
-                playerColors.set(username, player.color);
-            }
-        }));
-
-        // Batch all DOM updates
-        const updates = [];
-        for (let y = 0; y < MinesweeperDB.gridHeight; y++) {
-            for (let x = 0; x < MinesweeperDB.gridWidth; x++) {
-                const key = `${x},${y}`;
-                const cell = cells.get(key);
-                if (!cell) continue;
-
-                // Prepare update without touching DOM
-                const update = {
-                    cell,
-                    className: 'grid-cell',
-                    innerHTML: '',
-                    style: { color: '', backgroundColor: '' }
-                };
-
-                if (MinesweeperDB.mines.revealed.has(key)) {
-                    if (MinesweeperDB.isMine(x, y)) {
-                        update.innerHTML = '💣';
-                        update.className += ' revealed mine';
-                    } else {
-                        const count = MinesweeperDB.getAdjacentMines(x, y);
-                        update.innerHTML = count || '';
-                        update.className += ' revealed' + (count ? ` adjacent-${count}` : ' empty');
-                    }
-                } else {
-                    const marker = MinesweeperDB.mines.markers.get(key);
-                    if (marker) {
-                        update.innerHTML = marker.avatar;
-                        update.style.color = playerColors.get(marker.username) || '';
-                    }
-                }
-                updates.push(update);
-            }
-        }
-
-        // Apply all DOM updates in a single batch
-        requestAnimationFrame(() => {
-            updates.forEach(update => {
-                update.cell.className = update.className;
-                update.cell.innerHTML = update.innerHTML;
-                update.cell.style.color = update.style.color;
-                update.cell.style.backgroundColor = update.style.backgroundColor;
-            });
-        });
+        // Update visible cells
+        this.updateVisibleCells(container, grid);
 
         // Update score
         const scoreElement = document.querySelector('.player-score');
@@ -290,6 +225,20 @@ const PlayScreen = {
         const grid = document.querySelector('.game-grid');
         if (grid) {
             grid.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.zoom})`;
+            this.queueCellUpdate();
+        }
+    },
+
+    // Queue cell update to prevent too frequent updates
+    queueCellUpdate: function () {
+        if (!this.cellUpdateQueued) {
+            this.cellUpdateQueued = true;
+            requestAnimationFrame(() => {
+                const container = document.querySelector('.game-container');
+                const grid = document.querySelector('.game-grid');
+                this.updateVisibleCells(container, grid);
+                this.cellUpdateQueued = false;
+            });
         }
     },
 
@@ -661,5 +610,148 @@ const PlayScreen = {
     calculateMoveSpeed: function (currentZoom) {
         // Faster movement when zoomed out, slower when zoomed in
         return this.BASE_MOVE_SPEED * (1 / currentZoom);
+    },
+
+    // Calculate visible grid bounds with margin
+    getVisibleBounds: function (container) {
+        if (!container) return null;
+
+        const rect = container.getBoundingClientRect();
+        const scale = 1 / this.zoom;
+
+        // Convert screen coordinates to grid coordinates
+        let left = Math.floor((-this.offsetX * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
+        let top = Math.floor((-this.offsetY * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
+        let right = Math.ceil((rect.width * scale - this.offsetX * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
+        let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
+
+        // Clamp to grid boundaries
+        return {
+            left: Math.max(0, left),
+            top: Math.max(0, top),
+            right: Math.min(MinesweeperDB.gridWidth, right),
+            bottom: Math.min(MinesweeperDB.gridHeight, bottom)
+        };
+    },
+
+    // Get or create a cell element from the pool
+    getCellElement: function () {
+        if (this.cellPool.length > 0) {
+            return this.cellPool.pop();
+        }
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        return cell;
+    },
+
+    // Return a cell element to the pool
+    recycleCellElement: function (cell) {
+        if (this.cellPool.length < this.CELL_POOL_SIZE) {
+            cell.style.display = 'none';
+            this.cellPool.push(cell);
+        } else {
+            cell.remove();
+        }
+    },
+
+    // Update visible cells
+    updateVisibleCells: function (container, grid) {
+        if (!container || !grid) return;
+
+        const bounds = this.getVisibleBounds(container);
+        if (!bounds) return;
+
+        // Track cells to remove
+        const cellsToRemove = new Set(this.visibleCells.keys());
+
+        // Create document fragment for batch updates
+        const fragment = document.createDocumentFragment();
+        let updatesNeeded = false;
+
+        // Update or create visible cells
+        for (let y = bounds.top; y < bounds.bottom; y++) {
+            for (let x = bounds.left; x < bounds.right; x++) {
+                const key = `${x},${y}`;
+                cellsToRemove.delete(key);
+
+                if (!this.visibleCells.has(key)) {
+                    const cell = this.createCell(x, y);
+                    fragment.appendChild(cell);
+                    this.visibleCells.set(key, cell);
+                    updatesNeeded = true;
+                }
+            }
+        }
+
+        // Remove out-of-view cells
+        for (const key of cellsToRemove) {
+            const cell = this.visibleCells.get(key);
+            cell.remove();
+            this.visibleCells.delete(key);
+            updatesNeeded = true;
+        }
+
+        // Batch DOM updates
+        if (fragment.children.length > 0) {
+            grid.appendChild(fragment);
+        }
+
+        // Only update states if needed
+        if (updatesNeeded) {
+            this.updateVisibleCellStates();
+        }
+    },
+
+    // Update the states of visible cells
+    updateVisibleCellStates: function () {
+        const updates = [];
+
+        for (const [key, cell] of this.visibleCells.entries()) {
+            const [x, y] = key.split(',').map(Number);
+            const update = { cell, classes: ['grid-cell'], html: '', color: '' };
+
+            if (MinesweeperDB.mines.revealed.has(key)) {
+                update.classes.push('revealed');
+                if (MinesweeperDB.isMine(x, y)) {
+                    update.classes.push('mine');
+                    update.html = '💣';
+                } else {
+                    const count = MinesweeperDB.getAdjacentMines(x, y);
+                    update.html = count || '';
+                    if (count) {
+                        update.classes.push(`adjacent-${count}`);
+                    } else {
+                        update.classes.push('empty');
+                    }
+                }
+            } else {
+                const marker = MinesweeperDB.mines.markers.get(key);
+                if (marker) {
+                    update.html = marker.avatar;
+                    update.color = marker.color;
+                }
+            }
+            updates.push(update);
+        }
+
+        // Batch apply all updates
+        requestAnimationFrame(() => {
+            updates.forEach(update => {
+                update.cell.className = update.classes.join(' ');
+                update.cell.innerHTML = update.html;
+                update.cell.style.color = update.color;
+            });
+        });
+    },
+
+    // Create a cell element
+    createCell: function (x, y) {
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+        cell.style.gridColumn = x + 1;
+        cell.style.gridRow = y + 1;
+        return cell;
     }
 }; 
