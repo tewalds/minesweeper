@@ -18,7 +18,7 @@ const PlayScreen = {
     MIN_IDLE_TIME: 800, // Minimum time to stay idle (ms)
     MAX_IDLE_TIME: 2500, // Maximum time to stay idle (ms)
     MIN_MOVE_DISTANCE: 1, // Minimum cells to move
-    MAX_MOVE_DISTANCE: 5, // Maximum cells to move
+    MAX_MOVE_DISTANCE: 3, // Maximum cells to move
 
     // Track movement state for each player
     playerMovements: new Map(), // Map of username -> movement state
@@ -65,19 +65,123 @@ const PlayScreen = {
             startTime: performance.now(),
             duration: 0,
             isMoving: false,
+            hasClickedThisPhase: false, // Track if player has clicked in current phase
             idleUntil: performance.now() + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME
         };
 
         this.playerMovements.set(player.username, state);
     },
 
+    // Update visual state immediately for a player action
+    updateVisualState: function (x, y, username, avatar, action) {
+        const key = `${x},${y}`;
+
+        // Optimistically update the visual state
+        if (action === 'flag') {
+            MinesweeperDB.mines.markers.set(key, { username, avatar });
+        } else if (action === 'unflag') {
+            MinesweeperDB.mines.markers.delete(key);
+        } else if (action === 'reveal') {
+            // Handle auto-reveal for empty cells
+            const cellsToReveal = new Set();
+            const queue = [[x, y]];
+
+            while (queue.length > 0) {
+                const [currX, currY] = queue.shift();
+                const currKey = `${currX},${currY}`;
+
+                if (cellsToReveal.has(currKey)) continue;
+
+                cellsToReveal.add(currKey);
+                MinesweeperDB.mines.revealed.add(currKey);
+
+                // If it's an empty cell (no adjacent mines), queue adjacent cells
+                if (!MinesweeperDB.isMine(currX, currY) && MinesweeperDB.getAdjacentMines(currX, currY) === 0) {
+                    // Check all adjacent cells
+                    for (let dx = -1; dx <= 1; dx++) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const newX = currX + dx;
+                            const newY = currY + dy;
+                            const newKey = `${newX},${newY}`;
+                            if (MinesweeperDB.isValidPosition(newX, newY) &&
+                                !MinesweeperDB.mines.revealed.has(newKey) &&
+                                !cellsToReveal.has(newKey) &&
+                                !MinesweeperDB.mines.markers.has(newKey)) {
+                                queue.push([newX, newY]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Force an immediate visual update
+        this.updateVisibleCellStates();
+    },
+
+    // Simulate a player click at a position
+    simulatePlayerClick: async function (x, y, username, avatar) {
+        // Skip if grid is being regenerated
+        if (this.isRegeneratingGrid) {
+            console.debug(`[Click] Skipped - grid regenerating (${username} at ${x},${y})`);
+            return;
+        }
+
+        try {
+            const key = `${x},${y}`;
+            console.debug(`[Click] ${username} attempting action at ${x},${y}`);
+
+            // 80% chance of flag/unflag, 20% chance of reveal
+            if (Math.random() < 0.8) {
+                // Check if cell has any flag
+                const marker = MinesweeperDB.mines.markers.get(key);
+                if (marker?.username === username) {
+                    // Remove own flag
+                    console.debug(`[Click] ${username} removing flag at ${x},${y}`);
+                    this.updateVisualState(x, y, username, avatar, 'unflag');
+                    await MinesweeperDB.toggleMarker(x, y, username, avatar);
+                } else if (!marker) {
+                    // Place new flag
+                    console.debug(`[Click] ${username} placing flag at ${x},${y}`);
+                    this.updateVisualState(x, y, username, avatar, 'flag');
+                    await MinesweeperDB.setMarker(x, y, username, avatar);
+                } else {
+                    console.debug(`[Click] ${username} can't flag - cell already marked by ${marker.username}`);
+                }
+            } else {
+                // Only reveal if cell isn't flagged
+                const marker = MinesweeperDB.mines.markers.get(key);
+                if (!marker) {
+                    console.debug(`[Click] ${username} revealing cell at ${x},${y}`);
+                    this.updateVisualState(x, y, username, avatar, 'reveal');
+                    await MinesweeperDB.revealCell(x, y, username);
+                } else {
+                    console.debug(`[Click] ${username} can't reveal - cell marked by ${marker.username}`);
+                }
+            }
+        } catch (error) {
+            console.warn(`[Click] Failed for ${username} at ${x},${y}:`, error);
+            // On error, force a full state refresh to ensure consistency
+            await MinesweeperDB.loadMines();
+            this.updateVisibleCellStates();
+        }
+    },
+
+    // Track grid regeneration state
+    isRegeneratingGrid: false,
+
     // Update movement state for all players
     updatePlayerMovements: function (timestamp) {
-        if (!this.cachedPlayerData) return;
+        if (!this.cachedPlayerData) {
+            console.debug('[Movement] No cached player data');
+            return;
+        }
 
         // Initialize movement state for new players
         this.cachedPlayerData.forEach(player => {
             if (!this.playerMovements.has(player.username)) {
+                console.debug(`[Movement] Initializing movement for ${player.username}`);
                 this.initPlayerMovement(player);
             }
         });
@@ -94,17 +198,33 @@ const PlayScreen = {
 
                 // Check if movement is complete
                 if (progress >= 1) {
+                    console.debug(`[Movement] ${username} finished moving to ${state.targetX},${state.targetY}`);
                     state.isMoving = false;
                     state.currentX = state.targetX;
                     state.currentY = state.targetY;
                     state.idleUntil = timestamp + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME;
+
+                    // Always trigger click at end of movement
+                    const player = this.cachedPlayerData.find(p => p.username === username);
+                    if (player) {
+                        const cellX = Math.round(state.currentX);
+                        const cellY = Math.round(state.currentY);
+                        console.debug(`[Movement] ${username} triggering click at ${cellX},${cellY}`);
+                        this.simulatePlayerClick(cellX, cellY, username, player.avatar).catch(error => {
+                            console.warn(`[Movement] Click failed for ${username}:`, error);
+                        });
+                    } else {
+                        console.debug(`[Movement] Player data not found for ${username}`);
+                    }
                 }
             } else if (timestamp >= state.idleUntil) {
                 // Start new movement
+                const target = this.generateTargetPosition(state.currentX, state.currentY);
+                console.debug(`[Movement] ${username} starting move from ${state.currentX},${state.currentY} to ${target.x},${target.y}`);
+
                 state.isMoving = true;
                 state.startX = state.currentX;
                 state.startY = state.currentY;
-                const target = this.generateTargetPosition(state.currentX, state.currentY);
                 state.targetX = target.x;
                 state.targetY = target.y;
                 state.startTime = timestamp;
@@ -538,18 +658,37 @@ const PlayScreen = {
             }
         });
 
-        // New Grid button
+        // New Grid button with synchronization
         newGridButton?.addEventListener('click', async (e) => {
-            e.stopPropagation(); // Prevent click from reaching document
+            e.stopPropagation();
+            if (this.isRegeneratingGrid) return; // Prevent multiple regenerations
+
             if (confirm('Are you sure you want to generate a new grid? This will affect all players.')) {
-                await MinesweeperDB.regenerateGrid();
-                // Force a complete grid refresh
-                const grid = document.querySelector('.game-grid');
-                if (grid) {
-                    grid.innerHTML = this.createGrid();
+                try {
+                    this.isRegeneratingGrid = true;
+                    // Stop updates temporarily
+                    this.stopUpdates();
+
+                    await MinesweeperDB.regenerateGrid();
+
+                    // Force a complete grid refresh
+                    const grid = document.querySelector('.game-grid');
+                    if (grid) {
+                        grid.innerHTML = this.createGrid();
+                    }
+                    await this.renderMinesweeperState();
+
+                    // Restart updates
+                    this.startUpdates();
+                    this.startMarkerUpdates();
+                    this.startMovementUpdates();
+                } catch (error) {
+                    console.error('Failed to regenerate grid:', error);
+                    alert('Failed to generate new grid. Please try again.');
+                } finally {
+                    this.isRegeneratingGrid = false;
+                    settingsDropdown?.classList.add('hidden');
                 }
-                await this.renderMinesweeperState();
-                settingsDropdown?.classList.add('hidden');
             }
         });
 

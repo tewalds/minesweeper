@@ -4,6 +4,8 @@ const MinesweeperDB = {
     minePositionMap: null,
     gridWidth: 1000,
     gridHeight: 1000,
+    isWriting: false, // Track if we're currently writing
+    writeQueue: [], // Queue pending writes
 
     // Initialize with 15% mines
     generateMines: function (gridWidth, gridHeight) {
@@ -48,56 +50,96 @@ const MinesweeperDB = {
         };
     },
 
-    // Load mines data
-    loadMines: async function () {
+    // Process queued writes one at a time
+    processWriteQueue: async function () {
+        if (this.isWriting || this.writeQueue.length === 0) return;
+
+        this.isWriting = true;
         try {
-            if (!this.fileHandle) {
-                throw new Error('No file handle provided');
-            }
+            const data = this.writeQueue.shift();
+            const writable = await this.fileHandle.createWritable();
+            await writable.write(JSON.stringify(data, null, 4));
+            await writable.close();
 
-            let contents = '';
+            // Process next write if any
+            this.isWriting = false;
+            if (this.writeQueue.length > 0) {
+                await this.processWriteQueue();
+            }
+        } catch (error) {
+            console.error('Error processing write queue:', error);
+            this.isWriting = false;
+            // Clear queue on error to prevent bad state
+            this.writeQueue = [];
+        }
+    },
+
+    // Queue a write operation
+    queueWrite: async function (data) {
+        this.writeQueue.push(data);
+        await this.processWriteQueue();
+    },
+
+    // Load mines data with retries
+    loadMines: async function () {
+        const maxRetries = 3;
+        let lastError = null;
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
+                if (!this.fileHandle) {
+                    throw new Error('No file handle provided');
+                }
+
+                // Wait for any pending writes to complete
+                while (this.isWriting || this.writeQueue.length > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
                 const file = await this.fileHandle.getFile();
-                contents = await file.text();
-            } catch (error) {
-                console.error('Error reading mines file:', error);
-                this.mines = this.createEmptyState();
-                await this.saveMines();
-                return;
-            }
+                const contents = await file.text();
 
-            try {
                 if (!contents.trim()) {
                     this.mines = this.createEmptyState();
                     await this.saveMines();
                 } else {
-                    const data = JSON.parse(contents);
-                    if (!data.mines) {
+                    try {
+                        const data = JSON.parse(contents);
+                        if (!data.mines) {
+                            this.mines = this.createEmptyState();
+                            await this.saveMines();
+                        } else {
+                            // Convert loaded data to efficient structures
+                            this.mines = {
+                                positions: data.mines.positions,
+                                revealed: new Set(Object.keys(data.mines.revealed)),
+                                markers: new Map(Object.entries(data.mines.markers)),
+                                scores: data.mines.scores || this.defaultScores
+                            };
+                            // Rebuild mine position map
+                            this.minePositionMap = new Set(this.mines.positions.map(p => `${p.x},${p.y}`));
+                        }
+                    } catch (e) {
+                        console.error('Invalid JSON, initializing with new mines');
                         this.mines = this.createEmptyState();
                         await this.saveMines();
-                    } else {
-                        // Convert loaded data to efficient structures
-                        this.mines = {
-                            positions: data.mines.positions,
-                            revealed: new Set(Object.keys(data.mines.revealed)),
-                            markers: new Map(Object.entries(data.mines.markers)),
-                            scores: data.mines.scores || this.defaultScores
-                        };
-                        // Rebuild mine position map
-                        this.minePositionMap = new Set(this.mines.positions.map(p => `${p.x},${p.y}`));
                     }
                 }
-            } catch (e) {
-                console.error('Invalid JSON, initializing with new mines');
-                this.mines = this.createEmptyState();
-                await this.saveMines();
-            }
-        } catch (error) {
-            console.error('Error in loadMines:', error);
-            if (!this.mines) {
-                this.mines = this.createEmptyState();
+                return; // Success, exit retry loop
+            } catch (error) {
+                console.warn(`Load attempt ${attempt + 1} failed:`, error);
+                lastError = error;
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt)));
             }
         }
+
+        // If we get here, all retries failed
+        console.error('All load attempts failed:', lastError);
+        if (!this.mines) {
+            this.mines = this.createEmptyState();
+        }
+        throw lastError;
     },
 
     // Save mines to file - convert Sets/Maps to JSON-friendly format
@@ -117,12 +159,10 @@ const MinesweeperDB = {
                 }
             };
 
-            const writable = await this.fileHandle.createWritable();
-            await writable.write(JSON.stringify(saveData, null, 4));
-            await writable.close();
+            await this.queueWrite(saveData);
         } catch (error) {
             console.error('Error saving mines:', error);
-            alert('Failed to save mines data. Please ensure you granted file access permissions.');
+            throw error; // Rethrow to handle in calling code
         }
     },
 
