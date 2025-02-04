@@ -6,8 +6,8 @@
             "color": "#FF0000",
             "lastSeen": 1737822518529,
             "position": {
-                "x": 5,
-                "y": 5
+                "x": 120,
+                "y": 0
             }
         },
         "player2": {
@@ -16,8 +16,8 @@
             "color": "#00FF00",
             "lastSeen": 1737822514437,
             "position": {
-                "x": -3,
-                "y": 2
+                "x": 37,
+                "y": 120
             }
         },
         "player3": {
@@ -26,8 +26,8 @@
             "color": "#0000FF",
             "lastSeen": 1737822514437,
             "position": {
-                "x": 2,
-                "y": -4
+                "x": -120,
+                "y": 111
             }
         },
         "player4": {
@@ -36,8 +36,8 @@
             "color": "#FF8000",
             "lastSeen": 1737822514437,
             "position": {
-                "x": -5,
-                "y": -5
+                "x": -88,
+                "y": 20
             }
         },
         "player5": {
@@ -46,8 +46,8 @@
             "color": "#6600FF",
             "lastSeen": 1737822514437,
             "position": {
-                "x": 8,
-                "y": -2
+                "x": 85,
+                "y": 85
             }
         },
         "player_Alex": {
@@ -56,8 +56,8 @@
             "color": "#00FF00",
             "lastSeen": 1737823980471,
             "position": {
-                "x": -41,
-                "y": 4
+                "x": -145,
+                "y": -78
             }
         },
         "player_Ceerio": {
@@ -66,8 +66,8 @@
             "color": "#0000FF",
             "lastSeen": 1737824063273,
             "position": {
-                "x": -42,
-                "y": 3
+                "x": 167,
+                "y": -132
             }
         },
         "player_Booaoa": {
@@ -75,8 +75,8 @@
             "avatar": "🏛️",
             "color": "#FFFFB2",
             "position": {
-                "x": -91,
-                "y": 92
+                "x": -56,
+                "y": -189
             }
         },
         "player_Cheesio": {
@@ -84,8 +84,8 @@
             "avatar": "🌈",
             "color": "#85FF33",
             "position": {
-                "x": -4,
-                "y": 1
+                "x": 198,
+                "y": 45
             }
         },
         "player_Bloo": {
@@ -93,7 +93,7 @@
             "avatar": "🚓",
             "color": "#0000FF",
             "position": {
-                "x": -95,
+                "x": -178,
                 "y": 67
             }
         },
@@ -102,8 +102,8 @@
             "avatar": "🌍",
             "color": "#9999FF",
             "position": {
-                "x": 4,
-                "y": 4
+                "x": 23,
+                "y": -156
             }
         },
         "player_Aaa": {
@@ -111,8 +111,8 @@
             "avatar": "☎️",
             "color": "#FF0000",
             "position": {
-                "x": 54,
-                "y": -3
+                "x": -34,
+                "y": 187
             }
         },
         "player_Hugorst": {
@@ -120,8 +120,8 @@
             "avatar": "⚡️",
             "color": "#CCFF00",
             "position": {
-                "x": 0,
-                "y": 0
+                "x": 145,
+                "y": -89
             }
         },
         "player_Horstug": {
@@ -129,8 +129,8 @@
             "avatar": "🌹",
             "color": "#1919FF",
             "position": {
-                "x": -1,
-                "y": -1
+                "x": -167,
+                "y": -145
             }
         },
         "player_Zupps": {
@@ -138,8 +138,8 @@
             "avatar": "🌋",
             "color": "#4DFF4D",
             "position": {
-                "x": 0,
-                "y": 0
+                "x": 89,
+                "y": -178
             }
         },
         "player_Zupps2": {
@@ -147,8 +147,8 @@
             "avatar": "🌙",
             "color": "#94FF4D",
             "position": {
-                "x": 0,
-                "y": 0
+                "x": -123,
+                "y": -67
             }
         },
         "player_Zupps33": {
@@ -156,8 +156,8 @@
             "avatar": "🗻",
             "color": "#CCCCFF",
             "position": {
-                "x": -3,
-                "y": 1
+                "x": 178,
+                "y": 156
             }
         },
         "player_Ceerio2": {
@@ -165,8 +165,8 @@
             "avatar": "🎭",
             "color": "#4D4DFF",
             "position": {
-                "x": 0,
-                "y": 0
+                "x": -189,
+                "y": 12
             }
         },
         "player_Ceerio6": {
@@ -174,8 +174,8 @@
             "avatar": "📺",
             "color": "#FF9F33",
             "position": {
-                "x": -54,
-                "y": 6
+                "x": 134,
+                "y": 89
             }
         },
         "player_Ceerio7": {
@@ -183,8 +183,26 @@
             "avatar": "🏈",
             "color": "#3333FF",
             "position": {
+                "x": -45,
+                "y": -134
+            }
+        },
+        "player_Alejandro": {
+            "username": "Alejandro",
+            "avatar": "🌵",
+            "color": "#7519FF",
+            "position": {
                 "x": 0,
                 "y": 0
+            }
+        },
+        "player_Alejandro34": {
+            "username": "Alejandro34",
+            "avatar": "🎮",
+            "color": "#D4FF19",
+            "position": {
+                "x": 36,
+                "y": 119
             }
         }
     }

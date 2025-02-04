@@ -1,6 +1,7 @@
 const PlayScreen = {
     CELL_SIZE: 25, // pixels
-    UPDATE_INTERVAL: 100,
+    UPDATE_INTERVAL: 100, // Main game state update interval (ms)
+    MARKER_UPDATE_INTERVAL: 1000 / 60, // Player marker update interval (~60 FPS)
     MAX_ZOOM: 2.0, // 200% maximum zoom
     MIN_ZOOM_CAP: 0.5, // Never zoom out beyond 50%
     BASE_MOVE_SPEED: 20, // Base speed for keyboard movement
@@ -10,6 +11,9 @@ const PlayScreen = {
     RENDER_MARGIN: 2, // Extra cells to render beyond viewport
     CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
     updateInterval: null,
+    markerUpdateFrame: null,
+    lastMarkerUpdate: 0,
+    cachedPlayerData: null, // Cache for player data between updates
     isDragging: false,
     lastX: 0,
     lastY: 0,
@@ -107,6 +111,7 @@ const PlayScreen = {
         await this.renderMinesweeperState();
         this.attachGameHandlers();
         this.startUpdates();
+        this.startMarkerUpdates();
     },
 
     createGrid: function () {
@@ -226,65 +231,10 @@ const PlayScreen = {
     },
 
     renderPlayers: async function () {
-        const onlinePlayers = await MockDB.getOnlinePlayers();
-        const indicatorsContainer = document.querySelector('.player-indicators');
-        const cursorsContainer = document.querySelector('.player-cursors');
-        const container = document.querySelector('.game-container');
-
-        if (!indicatorsContainer || !cursorsContainer || !container) {
-            console.error('Required containers not found');
-            return;
+        if (!this.cachedPlayerData) {
+            this.cachedPlayerData = await MockDB.getOnlinePlayers();
         }
-
-        indicatorsContainer.innerHTML = '';
-        cursorsContainer.innerHTML = '';
-
-        // Create and position indicators/cursors for each player
-        onlinePlayers.forEach(player => {
-            if (player.username === GameState.currentUser.username) return;
-
-            const isVisible = this.isPlayerVisible(player.position.x, player.position.y, container);
-            const screenPos = this.calculatePlayerScreenPosition(player.position.x, player.position.y, container);
-            const score = MinesweeperDB.getScore(player.username);
-
-            if (isVisible && screenPos) {
-                // Player is visible on screen, show cursor
-                const cursor = document.createElement('div');
-                cursor.className = 'player-cursor';
-                cursor.style.left = `${screenPos.x}px`;
-                cursor.style.top = `${screenPos.y}px`;
-                cursor.style.color = player.color;
-
-                cursor.innerHTML = `
-                    <div class="cursor-pointer"></div>
-                    <div class="cursor-info">
-                        <span class="cursor-avatar">${player.avatar}</span>
-                        <span class="cursor-name">${player.username}</span>
-                        <span class="cursor-score">${score}</span>
-                    </div>
-                `;
-
-                cursorsContainer.appendChild(cursor);
-            } else {
-                // Player is off screen, show edge indicator
-                const angle = this.getPlayerDirection(player.position.x, player.position.y);
-                const pos = this.calculateEdgePosition(angle, container);
-
-                const indicator = document.createElement('div');
-                indicator.className = 'player-indicator';
-                indicator.style.left = `${pos.x}px`;
-                indicator.style.top = `${pos.y}px`;
-
-                indicator.innerHTML = `
-                    <span class="indicator-arrow">${this.getDirectionArrow(pos.angle)}</span>
-                    <span class="indicator-avatar" style="background-color: ${player.color}20">${player.avatar}</span>
-                    <span class="indicator-name">${player.username}</span>
-                    <span class="indicator-score">${score}</span>
-                `;
-
-                indicatorsContainer.appendChild(indicator);
-            }
-        });
+        await this.renderPlayerMarkers(this.cachedPlayerData);
     },
 
     renderMinesweeperState: async function () {
@@ -676,28 +626,47 @@ const PlayScreen = {
         // Clear any existing interval
         this.stopUpdates();
 
-        // Start periodic updates
+        // Start periodic updates for game state
         this.updateInterval = setInterval(async () => {
             try {
                 await Promise.all([
                     MockDB.loadPlayers(), // Refresh player data
                     MinesweeperDB.loadMines() // Refresh mines data
                 ]);
-                await this.renderPlayers();
+                // Cache the player data for marker updates
+                this.cachedPlayerData = await MockDB.getOnlinePlayers();
+                // Only update game state here, markers are updated separately
                 await this.renderMinesweeperState();
             } catch (error) {
                 console.error('Error during periodic update:', error);
             }
         }, this.UPDATE_INTERVAL);
+    },
 
-        // Clean up when leaving the screen
-        window.addEventListener('beforeunload', () => this.stopUpdates());
+    startMarkerUpdates: function () {
+        const updateMarkers = async (timestamp) => {
+            // Check if enough time has passed since last update
+            if (timestamp - this.lastMarkerUpdate >= this.MARKER_UPDATE_INTERVAL) {
+                this.lastMarkerUpdate = timestamp;
+                if (this.cachedPlayerData) {
+                    await this.renderPlayerMarkers(this.cachedPlayerData);
+                }
+            }
+
+            this.markerUpdateFrame = requestAnimationFrame(updateMarkers);
+        };
+
+        this.markerUpdateFrame = requestAnimationFrame(updateMarkers);
     },
 
     stopUpdates: function () {
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
+        }
+        if (this.markerUpdateFrame) {
+            cancelAnimationFrame(this.markerUpdateFrame);
+            this.markerUpdateFrame = null;
         }
     },
 
@@ -861,5 +830,66 @@ const PlayScreen = {
         cell.style.gridColumn = x + gridCenterX + 1;
         cell.style.gridRow = y + gridCenterY + 1;
         return cell;
+    },
+
+    // New method specifically for rendering markers
+    renderPlayerMarkers: async function (players) {
+        const indicatorsContainer = document.querySelector('.player-indicators');
+        const cursorsContainer = document.querySelector('.player-cursors');
+        const container = document.querySelector('.game-container');
+
+        if (!indicatorsContainer || !cursorsContainer || !container) {
+            return;
+        }
+
+        indicatorsContainer.innerHTML = '';
+        cursorsContainer.innerHTML = '';
+
+        // Create and position indicators/cursors for each player
+        players.forEach(player => {
+            if (player.username === GameState.currentUser.username) return;
+
+            const isVisible = this.isPlayerVisible(player.position.x, player.position.y, container);
+            const screenPos = this.calculatePlayerScreenPosition(player.position.x, player.position.y, container);
+            const score = MinesweeperDB.getScore(player.username);
+
+            if (isVisible && screenPos) {
+                // Player is visible on screen, show cursor
+                const cursor = document.createElement('div');
+                cursor.className = 'player-cursor';
+                cursor.style.left = `${screenPos.x}px`;
+                cursor.style.top = `${screenPos.y}px`;
+                cursor.style.color = player.color;
+
+                cursor.innerHTML = `
+                    <div class="cursor-pointer"></div>
+                    <div class="cursor-info">
+                        <span class="cursor-avatar">${player.avatar}</span>
+                        <span class="cursor-name">${player.username}</span>
+                        <span class="cursor-score">${score}</span>
+                    </div>
+                `;
+
+                cursorsContainer.appendChild(cursor);
+            } else {
+                // Player is off screen, show edge indicator
+                const angle = this.getPlayerDirection(player.position.x, player.position.y);
+                const pos = this.calculateEdgePosition(angle, container);
+
+                const indicator = document.createElement('div');
+                indicator.className = 'player-indicator';
+                indicator.style.left = `${pos.x}px`;
+                indicator.style.top = `${pos.y}px`;
+
+                indicator.innerHTML = `
+                    <span class="indicator-arrow">${this.getDirectionArrow(pos.angle)}</span>
+                    <span class="indicator-avatar" style="background-color: ${player.color}20">${player.avatar}</span>
+                    <span class="indicator-name">${player.username}</span>
+                    <span class="indicator-score">${score}</span>
+                `;
+
+                indicatorsContainer.appendChild(indicator);
+            }
+        });
     }
 }; 
