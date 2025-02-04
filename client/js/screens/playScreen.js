@@ -11,6 +11,10 @@ const PlayScreen = {
     RENDER_MARGIN: 2, // Extra cells to render beyond viewport
     CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
 
+    // Cursor offset for indicators and arrows (at 100% zoom)
+    CURSOR_OFFSET_X: 20, // Half cell width
+    CURSOR_OFFSET_Y: 30, // Half cell height
+
     // Movement simulation constants
     MOVEMENT_UPDATE_INTERVAL: 50, // Movement update interval (ms)
     MIN_MOVE_DURATION: 300, // Minimum time to reach target (ms)
@@ -184,7 +188,7 @@ const PlayScreen = {
                     }
 
                     // Update visual state after all reveals are done
-                    this.updateVisibleCellStates();
+                    this.updateVisibleCells();
                 }
             }
         } catch (error) {
@@ -427,10 +431,9 @@ const PlayScreen = {
         const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
         const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
 
-        // Convert grid coordinates to screen coordinates, accounting for centered origin
-        // Add 0.5 to x and y to target the center of the cell
-        const screenX = this.offsetX + ((x + gridCenterX + 0.5) * this.CELL_SIZE * this.zoom);
-        const screenY = this.offsetY + ((y + gridCenterY + 0.5) * this.CELL_SIZE * this.zoom);
+        // Convert grid coordinates to screen coordinates, accounting for centered origin and cursor offset
+        const screenX = this.offsetX + ((x + gridCenterX) * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_X * this.zoom);
+        const screenY = this.offsetY + ((y + gridCenterY) * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_Y * this.zoom);
 
         return {
             x: screenX,
