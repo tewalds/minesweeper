@@ -975,6 +975,13 @@ const PlayScreen = {
         indicatorsContainer.innerHTML = '';
         cursorsContainer.innerHTML = '';
 
+        // Get current viewport center in grid coordinates
+        const rect = container.getBoundingClientRect();
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE - gridCenterX;
+        const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE - gridCenterY;
+
         // Create and position indicators/cursors for each player
         players.forEach(player => {
             if (player.username === GameState.currentUser.username) return;
@@ -983,6 +990,19 @@ const PlayScreen = {
             const movement = this.playerMovements.get(player.username);
             const x = movement ? movement.currentX : player.position.x;
             const y = movement ? movement.currentY : player.position.y;
+
+            // Calculate distance from viewport center
+            const dx = x - viewportCenterX;
+            const dy = y - viewportCenterY;
+            const distance = Math.hypot(dx, dy);
+
+            // Calculate opacity based on distance (fade out between 50 and 100 tiles)
+            const opacity = distance >= 100 ? 0 :
+                distance <= 50 ? 1 :
+                    (100 - distance) / 50;
+
+            // Skip rendering if completely invisible
+            if (opacity === 0) return;
 
             const isVisible = this.isPlayerVisible(x, y, container);
             const screenPos = this.calculatePlayerScreenPosition(x, y, container);
@@ -995,6 +1015,7 @@ const PlayScreen = {
                 cursor.style.left = `${screenPos.x}px`;
                 cursor.style.top = `${screenPos.y}px`;
                 cursor.style.color = player.color;
+                cursor.style.opacity = opacity;
 
                 cursor.innerHTML = `
                     <div class="cursor-pointer"></div>
@@ -1015,6 +1036,7 @@ const PlayScreen = {
                 indicator.className = 'player-indicator';
                 indicator.style.left = `${pos.x}px`;
                 indicator.style.top = `${pos.y}px`;
+                indicator.style.opacity = opacity;
 
                 indicator.innerHTML = `
                     <span class="indicator-arrow">${this.getDirectionArrow(pos.angle)}</span>
