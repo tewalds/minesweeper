@@ -35,7 +35,7 @@ clean:
 fresh: clean all
 
 installdeps:
-	sudo apt install libabsl-dev libsfml-dev libwebsocketpp-dev
+	sudo apt install clang libabsl-dev libsfml-dev libwebsocketpp-dev
 
 gendeps:
 	ls *.cc -1 | xargs -L 1 cpp -M -MM
