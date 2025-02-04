@@ -59,22 +59,35 @@ const SpawnScreen = {
         `).join('');
     },
 
+    // Validate and clamp coordinates to grid bounds
+    validateCoordinates: function (x, y) {
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+
+        return {
+            x: Math.max(-gridCenterX, Math.min(gridCenterX, x)),
+            y: Math.max(-gridCenterY, Math.min(gridCenterY, y))
+        };
+    },
+
     setSpawnLocation: async function (x, y) {
         try {
-            GameState.currentUser.x = x;
-            GameState.currentUser.y = y;
+            // Validate and clamp coordinates
+            const validPos = this.validateCoordinates(x, y);
+            GameState.currentUser.x = validPos.x;
+            GameState.currentUser.y = validPos.y;
 
             // Ensure we have all required data before proceeding
             if (!GameState.currentUser.username ||
                 !GameState.currentUser.avatar ||
                 !GameState.currentUser.color ||
-                x === null ||
-                y === null) {
+                validPos.x === null ||
+                validPos.y === null) {
                 throw new Error('Missing required player data');
             }
 
             // Wait for player data to be saved before proceeding
-            await GameState.finalizePlayer(x, y);
+            await GameState.finalizePlayer(validPos.x, validPos.y);
             await App.showScreen(App.screens.PLAY);
         } catch (error) {
             console.error('Failed to set spawn location:', error);
@@ -84,50 +97,103 @@ const SpawnScreen = {
 
     // Find an empty cell around a position
     findEmptySpawnPosition: async function (targetX, targetY) {
-        const adjacentCells = [
-            { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-            { x: -1, y: 0 }, { x: 1, y: 0 },
-            { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 }
-        ];
+        // Validate target coordinates first
+        const validTarget = this.validateCoordinates(targetX, targetY);
+        targetX = validTarget.x;
+        targetY = validTarget.y;
 
         // Get all players
         const onlinePlayers = await MockDB.getOnlinePlayers();
-        const occupiedPositions = onlinePlayers.map(p => `${p.position.x},${p.position.y}`);
+        const occupiedPositions = new Set(onlinePlayers.map(p => `${p.position.x},${p.position.y}`));
 
-        // Try each adjacent cell
-        for (const offset of adjacentCells) {
-            const newX = targetX + offset.x;
-            const newY = targetY + offset.y;
-
-            // Check if this position is occupied
-            if (!occupiedPositions.includes(`${newX},${newY}`)) {
-                return { x: newX, y: newY };
-            }
-        }
-
-        // If all adjacent cells are occupied, try cells one step further out
-        const extendedCells = [
-            { x: -2, y: -2 }, { x: -1, y: -2 }, { x: 0, y: -2 }, { x: 1, y: -2 }, { x: 2, y: -2 },
-            { x: -2, y: -1 }, { x: 2, y: -1 },
-            { x: -2, y: 0 }, { x: 2, y: 0 },
-            { x: -2, y: 1 }, { x: 2, y: 1 },
-            { x: -2, y: 2 }, { x: -1, y: 2 }, { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }
+        // First try immediate adjacent positions (distance 1)
+        const adjacentOffsets = [
+            { x: 0, y: -1 },  // North
+            { x: 1, y: -1 },  // Northeast
+            { x: 1, y: 0 },   // East
+            { x: 1, y: 1 },   // Southeast
+            { x: 0, y: 1 },   // South
+            { x: -1, y: 1 },  // Southwest
+            { x: -1, y: 0 },  // West
+            { x: -1, y: -1 }  // Northwest
         ];
 
-        for (const offset of extendedCells) {
+        // Check immediate adjacent positions first
+        for (const offset of adjacentOffsets) {
             const newX = targetX + offset.x;
             const newY = targetY + offset.y;
+            const validPos = this.validateCoordinates(newX, newY);
+            const key = `${validPos.x},${validPos.y}`;
 
-            if (!occupiedPositions.includes(`${newX},${newY}`)) {
-                return { x: newX, y: newY };
+            if (!occupiedPositions.has(key)) {
+                return validPos;
             }
         }
 
-        // If still no empty cell found, return a random position nearby
-        return {
-            x: targetX + Math.floor(Math.random() * 5) - 2,
-            y: targetY + Math.floor(Math.random() * 5) - 2
-        };
+        // If no immediate spots, try increasingly larger rings
+        const maxRings = 5; // Look up to 5 cells out
+        for (let ring = 2; ring <= maxRings; ring++) {
+            const positions = [];
+
+            // Generate all positions in this ring
+            for (let dx = -ring; dx <= ring; dx++) {
+                for (let dy = -ring; dy <= ring; dy++) {
+                    // Only consider positions on the ring perimeter
+                    if (Math.abs(dx) === ring || Math.abs(dy) === ring) {
+                        const newX = targetX + dx;
+                        const newY = targetY + dy;
+
+                        // Validate position is within grid bounds
+                        const validPos = this.validateCoordinates(newX, newY);
+                        const key = `${validPos.x},${validPos.y}`;
+
+                        if (!occupiedPositions.has(key)) {
+                            // Calculate Manhattan distance to target
+                            const distance = Math.abs(validPos.x - targetX) + Math.abs(validPos.y - targetY);
+                            positions.push({ pos: validPos, distance });
+                        }
+                    }
+                }
+            }
+
+            // If we found valid positions, return the closest one
+            // If multiple positions have the same distance, choose randomly among them
+            if (positions.length > 0) {
+                // Sort by distance
+                positions.sort((a, b) => a.distance - b.distance);
+                const minDistance = positions[0].distance;
+                const closestPositions = positions.filter(p => p.distance === minDistance);
+                const chosen = closestPositions[Math.floor(Math.random() * closestPositions.length)];
+                return chosen.pos;
+            }
+        }
+
+        // If still no position found, find closest valid position
+        const searchRadius = 10; // Expand search to 10 cells in each direction
+        const candidates = [];
+
+        for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+                const newX = targetX + dx;
+                const newY = targetY + dy;
+                const validPos = this.validateCoordinates(newX, newY);
+                const key = `${validPos.x},${validPos.y}`;
+
+                if (!occupiedPositions.has(key)) {
+                    const distance = Math.abs(dx) + Math.abs(dy); // Manhattan distance
+                    candidates.push({ pos: validPos, distance });
+                }
+            }
+        }
+
+        if (candidates.length > 0) {
+            // Sort by distance and get the closest position
+            candidates.sort((a, b) => a.distance - b.distance);
+            return candidates[0].pos;
+        }
+
+        // Absolute fallback: return a position one cell away from target
+        return this.validateCoordinates(targetX + 1, targetY + 1);
     },
 
     attachEventListeners: function () {
@@ -149,8 +215,10 @@ const SpawnScreen = {
 
         // Random spawn
         document.getElementById('random-spawn').addEventListener('click', () => {
-            const x = Math.floor(Math.random() * 201) - 100; // -100 to 100
-            const y = Math.floor(Math.random() * 201) - 100;
+            const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+            const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+            const x = Math.floor(Math.random() * MinesweeperDB.gridWidth) - gridCenterX;
+            const y = Math.floor(Math.random() * MinesweeperDB.gridHeight) - gridCenterY;
             this.setSpawnLocation(x, y);
         });
 

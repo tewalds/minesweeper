@@ -296,6 +296,7 @@ const PlayScreen = {
     cellPool: [], // Pool of reusable cell elements
     visibleCells: new Map(), // Currently visible cells
     cellUpdateQueued: false, // Prevent multiple concurrent updates
+    isMouseInWindow: true,
 
     // Calculate minimum zoom to ensure grid fills viewport
     calculateMinZoom: function (containerWidth, containerHeight) {
@@ -309,6 +310,28 @@ const PlayScreen = {
         // Use the larger zoom to ensure grid fills viewport in both dimensions
         // But never go below MIN_ZOOM_CAP
         return Math.max(Math.max(zoomWidth, zoomHeight), this.MIN_ZOOM_CAP);
+    },
+
+    // Center the camera on a specific position
+    centerOnPosition: function (x, y) {
+        const container = document.querySelector('.game-container');
+        const grid = document.querySelector('.game-grid');
+        if (!container || !grid) return;
+
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+
+        // Calculate the position in screen coordinates
+        const screenX = (x + gridCenterX) * this.CELL_SIZE;
+        const screenY = (y + gridCenterY) * this.CELL_SIZE;
+
+        // Center the view on this position
+        this.offsetX = (container.clientWidth / 2) - (screenX * this.zoom);
+        this.offsetY = (container.clientHeight / 2) - (screenY * this.zoom);
+
+        // Ensure we stay within bounds
+        this.clampOffset(container);
+        this.updateGridTransform();
     },
 
     // Clamp offset values to keep grid in bounds
@@ -373,15 +396,22 @@ const PlayScreen = {
         `;
         container.innerHTML = html;
 
-        // Center the grid initially
-        this.centerGrid();
+        // Initialize zoom and basic positioning
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) {
+            this.MIN_ZOOM = this.calculateMinZoom(gameContainer.clientWidth, gameContainer.clientHeight);
+            this.zoom = Math.max(1.0, this.MIN_ZOOM); // Start at 100% zoom or higher if needed to fill screen
+        }
+
+        // Center on player's spawn position
+        this.centerOnPosition(GameState.currentUser.x, GameState.currentUser.y);
 
         await this.renderPlayers();
         await this.renderMinesweeperState();
         this.attachGameHandlers();
         this.startUpdates();
         this.startMarkerUpdates();
-        this.startMovementUpdates(); // Start movement simulation
+        this.startMovementUpdates();
     },
 
     createGrid: function () {
@@ -579,36 +609,50 @@ const PlayScreen = {
             if (this.zoomAnimationFrame) cancelAnimationFrame(this.zoomAnimationFrame);
         });
 
+        // Initialize mouse position to center of container to prevent immediate scrolling
+        const rect = container.getBoundingClientRect();
+        this.lastX = rect.left + rect.width / 2;
+        this.lastY = rect.top + rect.height / 2;
+        this.isMouseInWindow = true;
+
         // Edge scrolling
         const updateEdgeScroll = () => {
+            if (!this.isMouseInWindow || this.isDragging) return;
+
             const rect = container.getBoundingClientRect();
             const mouseX = this.lastX - rect.left;
             const mouseY = this.lastY - rect.top;
+
+            // Only scroll if mouse is within the vertical/horizontal bounds of the container
+            const isInVerticalBounds = mouseY >= 0 && mouseY <= rect.height;
+            const isInHorizontalBounds = mouseX >= 0 && mouseX <= rect.width;
+
             let moved = false;
+            const speed = this.EDGE_SCROLL_SPEED * (1 / this.zoom);
 
-            if (!this.isDragging) { // Only edge scroll when not dragging
-                const speed = this.EDGE_SCROLL_SPEED * (1 / this.zoom);
-
-                if (mouseX < this.EDGE_SCROLL_THRESHOLD) {
+            if (isInVerticalBounds) {
+                if (mouseX < this.EDGE_SCROLL_THRESHOLD && mouseX >= 0) {
                     this.offsetX += speed;
                     moved = true;
-                } else if (mouseX > rect.width - this.EDGE_SCROLL_THRESHOLD) {
+                } else if (mouseX > rect.width - this.EDGE_SCROLL_THRESHOLD && mouseX <= rect.width) {
                     this.offsetX -= speed;
                     moved = true;
                 }
+            }
 
-                if (mouseY < this.EDGE_SCROLL_THRESHOLD) {
+            if (isInHorizontalBounds) {
+                if (mouseY < this.EDGE_SCROLL_THRESHOLD && mouseY >= 0) {
                     this.offsetY += speed;
                     moved = true;
-                } else if (mouseY > rect.height - this.EDGE_SCROLL_THRESHOLD) {
+                } else if (mouseY > rect.height - this.EDGE_SCROLL_THRESHOLD && mouseY <= rect.height) {
                     this.offsetY -= speed;
                     moved = true;
                 }
+            }
 
-                if (moved) {
-                    this.clampOffset(container);
-                    this.updateGridTransform();
-                }
+            if (moved) {
+                this.clampOffset(container);
+                this.updateGridTransform();
             }
 
             requestAnimationFrame(updateEdgeScroll);
@@ -617,8 +661,17 @@ const PlayScreen = {
         // Start edge scrolling loop
         requestAnimationFrame(updateEdgeScroll);
 
-        // Track mouse position for edge scrolling
-        container.addEventListener('mousemove', (e) => {
+        // Track mouse position and window state
+        window.addEventListener('mouseleave', () => {
+            this.isMouseInWindow = false;
+        });
+
+        window.addEventListener('mouseenter', () => {
+            this.isMouseInWindow = true;
+        });
+
+        // Track mouse position globally
+        window.addEventListener('mousemove', (e) => {
             this.lastX = e.clientX;
             this.lastY = e.clientY;
         });

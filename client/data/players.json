@@ -210,8 +210,17 @@
             "avatar": "🎾",
             "color": "#FFE966",
             "position": {
-                "x": 144,
-                "y": -90
+                "x": -189,
+                "y": 11
+            }
+        },
+        "player_Justinnnn4": {
+            "username": "Justinnnn4",
+            "avatar": "🚑",
+            "color": "#D1B2FF",
+            "position": {
+                "x": -120,
+                "y": 110
             }
         }
     }
