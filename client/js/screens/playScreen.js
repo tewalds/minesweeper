@@ -86,6 +86,7 @@ const PlayScreen = {
                     </div>
                 </div>
                 <div class="game-container">
+                    <div class="player-cursors"></div>
                     <div class="player-indicators"></div>
                     <div class="game-grid" style="
                         width: ${MinesweeperDB.gridWidth * this.CELL_SIZE}px; 
@@ -148,7 +149,7 @@ const PlayScreen = {
     },
 
     // Calculate screen position for a player
-    calculatePlayerScreenPosition: function (playerX, playerY, container) {
+    calculatePlayerScreenPosition: function (x, y, container) {
         if (!container) return null;
 
         const rect = container.getBoundingClientRect();
@@ -156,8 +157,9 @@ const PlayScreen = {
         const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
 
         // Convert grid coordinates to screen coordinates, accounting for centered origin
-        const screenX = this.offsetX + ((playerX + gridCenterX) * this.CELL_SIZE * this.zoom);
-        const screenY = this.offsetY + ((playerY + gridCenterY) * this.CELL_SIZE * this.zoom);
+        // Add 0.5 to x and y to target the center of the cell
+        const screenX = this.offsetX + ((x + gridCenterX + 0.5) * this.CELL_SIZE * this.zoom);
+        const screenY = this.offsetY + ((y + gridCenterY + 0.5) * this.CELL_SIZE * this.zoom);
 
         return {
             x: screenX,
@@ -168,9 +170,16 @@ const PlayScreen = {
 
     // Calculate position on screen edge for an angle
     calculateEdgePosition: function (angle, container) {
-        const margin = 20; // Margin from screen edge
-        const width = container.clientWidth - margin * 2;
-        const height = container.clientHeight - margin * 2;
+        // Increase margin to account for indicator size
+        const margin = {
+            top: 40,    // Account for indicator height
+            right: 40,  // Account for indicator width
+            bottom: 40, // Account for indicator height
+            left: 40    // Account for indicator width
+        };
+
+        const width = container.clientWidth - (margin.left + margin.right);
+        const height = container.clientHeight - (margin.top + margin.bottom);
 
         // Normalize angle to 0-2π range
         const normalizedAngle = (angle + 2 * Math.PI) % (2 * Math.PI);
@@ -180,28 +189,28 @@ const PlayScreen = {
 
         // Right edge
         if (normalizedAngle < Math.PI / 4 || normalizedAngle > 7 * Math.PI / 4) {
-            x = width + margin;
-            y = height / 2 + margin + Math.tan(normalizedAngle) * width / 2;
+            x = width + margin.left;
+            y = height / 2 + margin.top + Math.tan(normalizedAngle) * width / 2;
         }
         // Bottom edge
         else if (normalizedAngle < 3 * Math.PI / 4) {
-            y = height + margin;
-            x = width / 2 + margin + Math.tan(Math.PI / 2 - normalizedAngle) * height / 2;
+            y = height + margin.top;
+            x = width / 2 + margin.left + Math.tan(Math.PI / 2 - normalizedAngle) * height / 2;
         }
         // Left edge
         else if (normalizedAngle < 5 * Math.PI / 4) {
-            x = margin;
-            y = height / 2 + margin - Math.tan(normalizedAngle) * width / 2;
+            x = margin.left;
+            y = height / 2 + margin.top - Math.tan(normalizedAngle) * width / 2;
         }
         // Top edge
         else {
-            y = margin;
-            x = width / 2 + margin - Math.tan(Math.PI / 2 - normalizedAngle) * height / 2;
+            y = margin.top;
+            x = width / 2 + margin.left - Math.tan(Math.PI / 2 - normalizedAngle) * height / 2;
         }
 
-        // Clamp positions to screen bounds
-        x = Math.max(margin, Math.min(width + margin, x));
-        y = Math.max(margin, Math.min(height + margin, y));
+        // Clamp positions to screen bounds with margins
+        x = Math.max(margin.left, Math.min(width + margin.left, x));
+        y = Math.max(margin.top, Math.min(height + margin.top, y));
 
         return { x, y, angle: normalizedAngle };
     },
@@ -219,41 +228,47 @@ const PlayScreen = {
     renderPlayers: async function () {
         const onlinePlayers = await MockDB.getOnlinePlayers();
         const indicatorsContainer = document.querySelector('.player-indicators');
+        const cursorsContainer = document.querySelector('.player-cursors');
         const container = document.querySelector('.game-container');
 
-        if (!indicatorsContainer || !container) {
+        if (!indicatorsContainer || !cursorsContainer || !container) {
             console.error('Required containers not found');
             return;
         }
 
         indicatorsContainer.innerHTML = '';
+        cursorsContainer.innerHTML = '';
 
-        // Create and position indicators for each player
+        // Create and position indicators/cursors for each player
         onlinePlayers.forEach(player => {
             if (player.username === GameState.currentUser.username) return;
 
             const isVisible = this.isPlayerVisible(player.position.x, player.position.y, container);
             const screenPos = this.calculatePlayerScreenPosition(player.position.x, player.position.y, container);
+            const score = MinesweeperDB.getScore(player.username);
 
             if (isVisible && screenPos) {
-                // Player is visible on screen, show actual position
-                const indicator = document.createElement('div');
-                indicator.className = 'player-indicator';
-                indicator.style.left = `${screenPos.x}px`;
-                indicator.style.top = `${screenPos.y}px`;
+                // Player is visible on screen, show cursor
+                const cursor = document.createElement('div');
+                cursor.className = 'player-cursor';
+                cursor.style.left = `${screenPos.x}px`;
+                cursor.style.top = `${screenPos.y}px`;
+                cursor.style.color = player.color;
 
-                indicator.innerHTML = `
-                    <span class="indicator-avatar" style="background-color: ${player.color}20">${player.avatar}</span>
-                    <span class="indicator-name">${player.username}</span>
-                    <span class="indicator-score">${MinesweeperDB.getScore(player.username)}</span>
+                cursor.innerHTML = `
+                    <div class="cursor-pointer"></div>
+                    <div class="cursor-info">
+                        <span class="cursor-avatar">${player.avatar}</span>
+                        <span class="cursor-name">${player.username}</span>
+                        <span class="cursor-score">${score}</span>
+                    </div>
                 `;
 
-                indicatorsContainer.appendChild(indicator);
+                cursorsContainer.appendChild(cursor);
             } else {
                 // Player is off screen, show edge indicator
                 const angle = this.getPlayerDirection(player.position.x, player.position.y);
                 const pos = this.calculateEdgePosition(angle, container);
-                const score = MinesweeperDB.getScore(player.username);
 
                 const indicator = document.createElement('div');
                 indicator.className = 'player-indicator';
