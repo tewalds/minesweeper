@@ -4,7 +4,7 @@ const PlayScreen = {
     MIN_ZOOM: 0.40, // 40% minimum zoom
     MIN_ZOOM: 0.20, // 20% minimum zoom to see more of the larger grid
     MAX_ZOOM: 2.0, // 200% maximum zoom
-    ZOOM_SPEED: 0.1,
+    ZOOM_SPEED: 0.01,
     updateInterval: null,
     isDragging: false,
     lastX: 0,
