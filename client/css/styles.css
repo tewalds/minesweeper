@@ -224,7 +224,7 @@ button:disabled {
     display: grid;
     grid-auto-rows: var(--cell-size);
     grid-auto-columns: var(--cell-size);
-    transform-origin: center;
+    transform-origin: 0 0;
     transition: transform 0.1s ease-out;
 }
 
