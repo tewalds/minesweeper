@@ -1,7 +1,6 @@
 const PlayScreen = {
     CELL_SIZE: 25, // pixels
     UPDATE_INTERVAL: 2000, // 2 seconds
-    MIN_ZOOM: 0.40, // 40% minimum zoom
     MAX_ZOOM: 2.0, // 200% maximum zoom
     ZOOM_SPEED: 0.01,
     updateInterval: null,
@@ -11,6 +10,43 @@ const PlayScreen = {
     offsetX: 0,
     offsetY: 0,
     zoom: 1,
+
+    // Calculate minimum zoom to ensure grid fills viewport
+    calculateMinZoom: function (containerWidth, containerHeight) {
+        const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE;
+        const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE;
+
+        // Calculate zoom needed to fill width and height
+        const zoomWidth = containerWidth / gridWidth;
+        const zoomHeight = containerHeight / gridHeight;
+
+        // Use the larger zoom to ensure grid fills viewport in both dimensions
+        return Math.max(zoomWidth, zoomHeight);
+    },
+
+    // Clamp offset values to keep grid in bounds
+    clampOffset: function (container) {
+        if (!container) return;
+
+        const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE * this.zoom;
+        const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE * this.zoom;
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+
+        // If grid is smaller than container (at minimum zoom), center it
+        if (gridWidth <= containerWidth) {
+            this.offsetX = (containerWidth - gridWidth) / 2;
+        } else {
+            // Otherwise clamp to keep edges in bounds
+            this.offsetX = Math.min(0, Math.max(containerWidth - gridWidth, this.offsetX));
+        }
+
+        if (gridHeight <= containerHeight) {
+            this.offsetY = (containerHeight - gridHeight) / 2;
+        } else {
+            this.offsetY = Math.min(0, Math.max(containerHeight - gridHeight, this.offsetY));
+        }
+    },
 
     show: async function (container) {
         // Set cell size CSS variable
@@ -229,6 +265,12 @@ const PlayScreen = {
             const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE;
             const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE;
 
+            // Update minimum zoom based on container size
+            this.MIN_ZOOM = this.calculateMinZoom(gameContainer.clientWidth, gameContainer.clientHeight);
+
+            // Ensure current zoom is not below minimum
+            this.zoom = Math.max(this.zoom, this.MIN_ZOOM);
+
             // Calculate the center position
             this.offsetX = (gameContainer.clientWidth - gridWidth * this.zoom) / 2;
             this.offsetY = (gameContainer.clientHeight - gridHeight * this.zoom) / 2;
@@ -253,6 +295,11 @@ const PlayScreen = {
         const logoutButton = document.querySelector('.logout-button');
 
         if (!container || !grid) return;
+
+        // Update minimum zoom on window resize
+        window.addEventListener('resize', () => {
+            this.centerGrid();
+        });
 
         // Settings menu toggle
         settingsToggle?.addEventListener('click', (e) => {
@@ -307,6 +354,9 @@ const PlayScreen = {
                 this.offsetY += deltaY;
                 this.lastX = e.clientX;
                 this.lastY = e.clientY;
+
+                // Clamp the offset values
+                this.clampOffset(container);
                 this.updateGridTransform();
             }
         });
@@ -345,6 +395,8 @@ const PlayScreen = {
                 if (this.zoom === this.MIN_ZOOM) {
                     this.centerGrid();
                 } else {
+                    // Clamp the offsets after zooming to prevent seeing beyond edges
+                    this.clampOffset(container);
                     this.updateGridTransform();
                 }
             }
@@ -371,6 +423,8 @@ const PlayScreen = {
                     this.offsetX -= moveSpeed;
                     break;
             }
+            // Clamp the offset values
+            this.clampOffset(container);
             this.updateGridTransform();
         });
 
