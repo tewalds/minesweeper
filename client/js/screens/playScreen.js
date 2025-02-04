@@ -73,6 +73,36 @@ const PlayScreen = {
             idleUntil: performance.now() + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME
         };
 
+        // Initialize AI knowledge with correct spawn position
+        MinesweeperAI.initPlayerKnowledge(player.username);
+        MinesweeperAI.updatePosition(player.username, player.position.x, player.position.y);
+
+        // Also update AI's knowledge of any cells already revealed in their vision range
+        const knowledge = MinesweeperAI.getKnowledge(player.username);
+        MinesweeperDB.mines.revealed.forEach((value, key) => {
+            const [x, y] = key.split(',').map(Number);
+            if (MinesweeperAI.isInVisionRange(x, y, player.position.x, player.position.y)) {
+                knowledge.revealed.add(key);
+                // Add neighbors to frontier
+                MinesweeperAI.getNeighbors(x, y, player.position.x, player.position.y).forEach(neighbor => {
+                    const neighborKey = `${neighbor.x},${neighbor.y}`;
+                    if (!knowledge.revealed.has(neighborKey) && !knowledge.flagged.has(neighborKey)) {
+                        knowledge.frontier.add(neighborKey);
+                    }
+                });
+            }
+        });
+
+        // Update knowledge of flags in vision range
+        MinesweeperDB.mines.markers.forEach((marker, key) => {
+            const [x, y] = key.split(',').map(Number);
+            if (MinesweeperAI.isInVisionRange(x, y, player.position.x, player.position.y)) {
+                if (marker.username === player.username) {
+                    knowledge.flagged.add(key);
+                }
+            }
+        });
+
         this.playerMovements.set(player.username, state);
     },
 
@@ -131,25 +161,60 @@ const PlayScreen = {
         try {
             const key = `${x},${y}`;
 
-            // 80% chance of flag/unflag, 20% chance of reveal
-            if (Math.random() < 0.8) {
-                // Check if cell has any flag
-                const marker = MinesweeperDB.mines.markers.get(key);
-                if (marker?.username === username) {
-                    // Remove own flag
-                    this.updateVisualState(x, y, username, avatar, 'unflag');
-                    await MinesweeperDB.toggleMarker(x, y, username, avatar);
-                } else if (!marker) {
-                    // Place new flag
-                    this.updateVisualState(x, y, username, avatar, 'flag');
-                    await MinesweeperDB.setMarker(x, y, username, avatar);
+            // Get AI's next move if this is a fake player
+            if (username !== GameState.currentUser.username) {
+                const nextMove = MinesweeperAI.getNextMove(username);
+                if (nextMove && nextMove.certainty >= 0.8) {
+                    // Use AI's suggested move instead
+                    x = nextMove.x;
+                    y = nextMove.y;
+                    if (nextMove.action === 'flag') {
+                        const marker = MinesweeperDB.mines.markers.get(`${x},${y}`);
+                        if (marker?.username === username) {
+                            // Remove own flag
+                            this.updateVisualState(x, y, username, avatar, 'unflag');
+                            await MinesweeperDB.toggleMarker(x, y, username, avatar);
+                            MinesweeperAI.updateFlag(username, x, y, false);
+                        } else if (!marker) {
+                            // Place new flag
+                            this.updateVisualState(x, y, username, avatar, 'flag');
+                            await MinesweeperDB.setMarker(x, y, username, avatar);
+                            MinesweeperAI.updateFlag(username, x, y, true);
+
+                            // Handle additional mines if provided
+                            if (nextMove.additionalMines) {
+                                for (const mine of nextMove.additionalMines) {
+                                    const mineMarker = MinesweeperDB.mines.markers.get(`${mine.x},${mine.y}`);
+                                    if (!mineMarker) {
+                                        this.updateVisualState(mine.x, mine.y, username, avatar, 'flag');
+                                        await MinesweeperDB.setMarker(mine.x, mine.y, username, avatar);
+                                        MinesweeperAI.updateFlag(username, mine.x, mine.y, true);
+                                    }
+                                }
+                            }
+                        }
+                        return;
+                    }
                 }
-            } else {
+            }
+
+            // Check if cell has any flag
+            const marker = MinesweeperDB.mines.markers.get(`${x},${y}`);
+            if (marker?.username === username) {
+                // Remove own flag
+                this.updateVisualState(x, y, username, avatar, 'unflag');
+                await MinesweeperDB.toggleMarker(x, y, username, avatar);
+                if (username !== GameState.currentUser.username) {
+                    MinesweeperAI.updateFlag(username, x, y, false);
+                }
+            } else if (!marker) {
                 // Only reveal if cell isn't flagged
-                const marker = MinesweeperDB.mines.markers.get(key);
-                if (!marker && !MinesweeperDB.mines.revealed.has(key)) {
+                if (!MinesweeperDB.mines.revealed.has(`${x},${y}`)) {
                     // First reveal the clicked cell
                     await MinesweeperDB.revealCell(x, y, username);
+                    if (username !== GameState.currentUser.username) {
+                        MinesweeperAI.updateKnowledge(username, x, y, MinesweeperDB.getAdjacentMines(x, y));
+                    }
 
                     // Then check if it's an empty cell and do flood fill
                     if (!MinesweeperDB.isMine(x, y) && MinesweeperDB.getAdjacentMines(x, y) === 0) {
@@ -175,6 +240,9 @@ const PlayScreen = {
 
                                         revealed.add(newKey);
                                         await MinesweeperDB.revealCell(newX, newY, username);
+                                        if (username !== GameState.currentUser.username) {
+                                            MinesweeperAI.updateKnowledge(username, newX, newY, MinesweeperDB.getAdjacentMines(newX, newY));
+                                        }
 
                                         // If this is also an empty cell, add it to queue
                                         if (!MinesweeperDB.isMine(newX, newY) &&
@@ -223,6 +291,9 @@ const PlayScreen = {
                 state.currentX = state.startX + (state.targetX - state.startX) * progress;
                 state.currentY = state.startY + (state.targetY - state.startY) * progress;
 
+                // Update AI's knowledge of current position
+                MinesweeperAI.updatePosition(username, Math.round(state.currentX), Math.round(state.currentY));
+
                 // Check if movement is complete
                 if (progress >= 1) {
                     state.isMoving = false;
@@ -241,19 +312,41 @@ const PlayScreen = {
                     }
                 }
             } else if (timestamp >= state.idleUntil) {
-                // Start new movement
-                const target = this.generateTargetPosition(state.currentX, state.currentY);
-                state.isMoving = true;
-                state.startX = state.currentX;
-                state.startY = state.currentY;
-                state.targetX = target.x;
-                state.targetY = target.y;
-                state.startTime = timestamp;
+                // Get next move from AI
+                const nextMove = MinesweeperAI.getNextMove(username);
 
-                // Calculate duration based on distance
-                const distance = Math.hypot(state.targetX - state.startX, state.targetY - state.startY);
-                const progress = Math.min(1, distance / this.MAX_MOVE_DISTANCE);
-                state.duration = this.MIN_MOVE_DURATION + progress * (this.MAX_MOVE_DURATION - this.MIN_MOVE_DURATION);
+                if (nextMove) {
+                    if (nextMove.action === 'move') {
+                        // Just move to new area without clicking
+                        state.isMoving = true;
+                        state.startX = state.currentX;
+                        state.startY = state.currentY;
+                        state.targetX = nextMove.x;
+                        state.targetY = nextMove.y;
+                        state.startTime = timestamp;
+
+                        // Calculate duration based on distance
+                        const distance = Math.hypot(state.targetX - state.startX, state.targetY - state.startY);
+                        const progress = Math.min(1, distance / this.MAX_MOVE_DISTANCE);
+                        state.duration = this.MIN_MOVE_DURATION + progress * (this.MAX_MOVE_DURATION - this.MIN_MOVE_DURATION);
+                    } else {
+                        // Move to target cell for action
+                        state.isMoving = true;
+                        state.startX = state.currentX;
+                        state.startY = state.currentY;
+                        state.targetX = nextMove.x;
+                        state.targetY = nextMove.y;
+                        state.startTime = timestamp;
+
+                        // Calculate duration based on distance
+                        const distance = Math.hypot(state.targetX - state.startX, state.targetY - state.startY);
+                        const progress = Math.min(1, distance / this.MAX_MOVE_DISTANCE);
+                        state.duration = this.MIN_MOVE_DURATION + progress * (this.MAX_MOVE_DURATION - this.MIN_MOVE_DURATION);
+                    }
+                } else {
+                    // No move available, just wait longer
+                    state.idleUntil = timestamp + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME;
+                }
             }
         });
     },
