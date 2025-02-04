@@ -10,6 +10,134 @@ const PlayScreen = {
     EDGE_SCROLL_SPEED: 15, // Base speed for edge scrolling
     RENDER_MARGIN: 2, // Extra cells to render beyond viewport
     CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
+
+    // Movement simulation constants
+    MOVEMENT_UPDATE_INTERVAL: 50, // Movement update interval (ms)
+    MIN_MOVE_DURATION: 300, // Minimum time to reach target (ms)
+    MAX_MOVE_DURATION: 800, // Maximum time to reach target (ms)
+    MIN_IDLE_TIME: 800, // Minimum time to stay idle (ms)
+    MAX_IDLE_TIME: 2500, // Maximum time to stay idle (ms)
+    MIN_MOVE_DISTANCE: 1, // Minimum cells to move
+    MAX_MOVE_DISTANCE: 5, // Maximum cells to move
+
+    // Track movement state for each player
+    playerMovements: new Map(), // Map of username -> movement state
+    movementUpdateInterval: null,
+    lastMovementUpdate: 0,
+
+    // Generate a new target position near current position
+    generateTargetPosition: function (currentX, currentY) {
+        // Pick a random distance (1-5 cells)
+        const distance = Math.floor(Math.random() * (this.MAX_MOVE_DISTANCE - this.MIN_MOVE_DISTANCE + 1)) + this.MIN_MOVE_DISTANCE;
+
+        // Pick one of 8 directions (like adjacent cells)
+        const directions = [
+            { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
+            { x: -1, y: 0 }, { x: 1, y: 0 },
+            { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 }
+        ];
+        const dir = directions[Math.floor(Math.random() * directions.length)];
+
+        // Calculate new position
+        let targetX = currentX + (dir.x * distance);
+        let targetY = currentY + (dir.y * distance);
+
+        // Clamp to grid bounds
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        targetX = Math.max(-gridCenterX, Math.min(gridCenterX, targetX));
+        targetY = Math.max(-gridCenterY, Math.min(gridCenterY, targetY));
+
+        return { x: targetX, y: targetY };
+    },
+
+    // Initialize movement state for a player
+    initPlayerMovement: function (player) {
+        if (player.username === GameState.currentUser.username) return;
+
+        const state = {
+            currentX: player.position.x,
+            currentY: player.position.y,
+            targetX: player.position.x,
+            targetY: player.position.y,
+            startX: player.position.x,
+            startY: player.position.y,
+            startTime: performance.now(),
+            duration: 0,
+            isMoving: false,
+            idleUntil: performance.now() + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME
+        };
+
+        this.playerMovements.set(player.username, state);
+    },
+
+    // Update movement state for all players
+    updatePlayerMovements: function (timestamp) {
+        if (!this.cachedPlayerData) return;
+
+        // Initialize movement state for new players
+        this.cachedPlayerData.forEach(player => {
+            if (!this.playerMovements.has(player.username)) {
+                this.initPlayerMovement(player);
+            }
+        });
+
+        // Update each player's movement
+        this.playerMovements.forEach((state, username) => {
+            if (username === GameState.currentUser.username) return;
+
+            if (state.isMoving) {
+                // Update current position based on progress
+                const progress = Math.min(1, (timestamp - state.startTime) / state.duration);
+                state.currentX = state.startX + (state.targetX - state.startX) * progress;
+                state.currentY = state.startY + (state.targetY - state.startY) * progress;
+
+                // Check if movement is complete
+                if (progress >= 1) {
+                    state.isMoving = false;
+                    state.currentX = state.targetX;
+                    state.currentY = state.targetY;
+                    state.idleUntil = timestamp + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME;
+                }
+            } else if (timestamp >= state.idleUntil) {
+                // Start new movement
+                state.isMoving = true;
+                state.startX = state.currentX;
+                state.startY = state.currentY;
+                const target = this.generateTargetPosition(state.currentX, state.currentY);
+                state.targetX = target.x;
+                state.targetY = target.y;
+                state.startTime = timestamp;
+
+                // Calculate duration based on distance
+                const distance = Math.hypot(state.targetX - state.startX, state.targetY - state.startY);
+                const progress = Math.min(1, distance / this.MAX_MOVE_DISTANCE);
+                state.duration = this.MIN_MOVE_DURATION + progress * (this.MAX_MOVE_DURATION - this.MIN_MOVE_DURATION);
+            }
+        });
+    },
+
+    // Start movement updates
+    startMovementUpdates: function () {
+        const updateMovements = (timestamp) => {
+            // Check if enough time has passed since last update
+            if (timestamp - this.lastMovementUpdate >= this.MOVEMENT_UPDATE_INTERVAL) {
+                this.lastMovementUpdate = timestamp;
+                this.updatePlayerMovements(timestamp);
+            }
+            this.movementUpdateInterval = requestAnimationFrame(updateMovements);
+        };
+        this.movementUpdateInterval = requestAnimationFrame(updateMovements);
+    },
+
+    // Stop movement updates
+    stopMovementUpdates: function () {
+        if (this.movementUpdateInterval) {
+            cancelAnimationFrame(this.movementUpdateInterval);
+            this.movementUpdateInterval = null;
+        }
+    },
+
     updateInterval: null,
     markerUpdateFrame: null,
     lastMarkerUpdate: 0,
@@ -112,6 +240,7 @@ const PlayScreen = {
         this.attachGameHandlers();
         this.startUpdates();
         this.startMarkerUpdates();
+        this.startMovementUpdates(); // Start movement simulation
     },
 
     createGrid: function () {
@@ -668,6 +797,7 @@ const PlayScreen = {
             cancelAnimationFrame(this.markerUpdateFrame);
             this.markerUpdateFrame = null;
         }
+        this.stopMovementUpdates(); // Stop movement simulation
     },
 
     // Calculate zoom speed based on current zoom level
@@ -849,8 +979,13 @@ const PlayScreen = {
         players.forEach(player => {
             if (player.username === GameState.currentUser.username) return;
 
-            const isVisible = this.isPlayerVisible(player.position.x, player.position.y, container);
-            const screenPos = this.calculatePlayerScreenPosition(player.position.x, player.position.y, container);
+            // Get simulated position if available, otherwise use static position
+            const movement = this.playerMovements.get(player.username);
+            const x = movement ? movement.currentX : player.position.x;
+            const y = movement ? movement.currentY : player.position.y;
+
+            const isVisible = this.isPlayerVisible(x, y, container);
+            const screenPos = this.calculatePlayerScreenPosition(x, y, container);
             const score = MinesweeperDB.getScore(player.username);
 
             if (isVisible && screenPos) {
@@ -873,7 +1008,7 @@ const PlayScreen = {
                 cursorsContainer.appendChild(cursor);
             } else {
                 // Player is off screen, show edge indicator
-                const angle = this.getPlayerDirection(player.position.x, player.position.y);
+                const angle = this.getPlayerDirection(x, y);
                 const pos = this.calculateEdgePosition(angle, container);
 
                 const indicator = document.createElement('div');
