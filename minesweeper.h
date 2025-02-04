@@ -82,16 +82,14 @@ enum CellState {
   MARKED = 11,
 };
 
-struct Cell {
-  CellState state;
-  bool bomb;
-  int user;
-};
-
 enum ActionType {
   PASS,
   OPEN, 
   MARK,
+
+  RESET,
+  PAUSE,
+  QUIT,
 };
 
 struct Action {

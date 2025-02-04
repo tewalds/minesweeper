@@ -1,16 +1,16 @@
 
-#include "agent.h"
+#include "agent_last.h"
 
 #include "minesweeper.h"
 #include "point.h"
 
 
-Agent::Agent(Pointi dims, int user)
+AgentLast::AgentLast(Pointi dims, int user)
     : dims_(dims), user_(user), state_(dims) {
   reset();
 }
 
-void Agent::reset() {
+void AgentLast::reset() {
   state_.fill(HIDDEN);
   actions_.clear();
   rolling_action_ = {
@@ -20,10 +20,10 @@ void Agent::reset() {
   };
 }
 
-Action Agent::step(const std::vector<Update>& updates) {
+Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
   // Update state.
   for (auto u : updates) {
-    // std::cout << absl::StrFormat("Agent.step: got Update(%i, %i, %i, %i)", 
+    // std::cout << absl::StrFormat("AgentLast.step: got Update(%i, %i, %i, %i)",
     //                              u.state, u.point.x, u.point.y, u.user) << std::endl;
     state_[u.point] = u.state;
     if (u.user == user_) {
@@ -66,7 +66,6 @@ Action Agent::step(const std::vector<Update>& updates) {
 
         for (Pointi nn : neighbors) {
           if (state_[nn] == HIDDEN) {
-            // actions_.push_back({act, nn, user_});
             actions_.insert({int(act), nn});
           }
         }
@@ -74,37 +73,31 @@ Action Agent::step(const std::vector<Update>& updates) {
     }
   }
 
-  // Return an arbitrary valid action from the action queue.
-  // while (!actions_.empty()) {
-  //   unsigned int i = absl::Uniform(bitgen_, 0u, actions_.size());
-  //   Action a = actions_[i];
-  //   actions_[i] = actions_.back();
-  //   // Action a = actions_.back();
-  //   actions_.pop_back();
-  //   if (state[a.point] == HIDDEN) {
-  //     // std::cout << absl::StrFormat("send Action(%i, %i, %i, %i)",
-  //     //     action.action, action.point.x, action.point.y, action.user) << std::endl;
-  //     return a;
-  //   }
-  // }
+  if (!paused) {
+    // if (!actions_.empty() && absl::Uniform(bitgen_, 0, 1000) == 0) {
+    //   actions_.validate();
+    //   std::cout << "size: " << actions_.size()
+    //             << " max depth: " << actions_.depth_max()
+    //             << " avg depth: " << actions_.depth_avg()
+    //             << " std dev: " << actions_.depth_stddev()
+    //             << " balance: " << actions_.balance_factor() << std::endl;
+    //   // actions_.print_tree();
+    // }
 
-  // if (!actions_.empty() && absl::Uniform(bitgen_, 0, 1000) == 0) {
-  //   actions_.validate();
-  //   std::cout << "size: " << actions_.size()
-  //             << " max depth: " << actions_.depth_max()
-  //             << " avg depth: " << actions_.depth_avg()
-  //             << " std dev: " << actions_.depth_stddev()
-  //             << " balance: " << actions_.balance_factor() << std::endl;
-  //   // actions_.print_tree();
-  // }
-
-  while (!actions_.empty()) {
-    KDTree::Value a = actions_.pop_closest(
-        // Rounding fixes a systematic bias towards the top left from truncating.
-        {int(std::round(rolling_action_.x)),
+    while (!actions_.empty()) {
+      KDTree::Value a = actions_.pop_closest(
+      // KDTree::Value a = actions_.find_closest(
+          // Rounding fixes a systematic bias towards the top left from truncating.
+          {int(std::round(rolling_action_.x)),
           int(std::round(rolling_action_.y))});
-    if (state_[a.p] == HIDDEN) {
-      return {ActionType(a.value), a.p, user_};
+      std::cout << a.p.x << "," << a.p.y << std::endl;
+      if (state_[a.p] == HIDDEN) {
+        std::cout << "return\n";
+        return {ActionType(a.value), a.p, user_};
+      // } else {
+      //   // actions_.validate();
+      //   std::cout << "remove " << (actions_.remove(a.p) ? "success" : "failure") << "\n";
+      }
     }
   }
 

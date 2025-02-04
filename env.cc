@@ -106,7 +106,3 @@ std::vector<Update> Env::step(Action action) {
   }
   return updates;
 }
-
-const Array2D<Cell>& Env::state() const {
-  return state_;
-}

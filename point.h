@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <ostream>
+
 struct Pointi {
   union {
     struct { int x, y; };
@@ -14,6 +16,8 @@ struct Pointi {
   bool operator!=(const Pointi& o) const { return !(*this == o); };
 };
 
+std::ostream& operator<< (std::ostream& stream, const Pointi& p);
+
 
 struct Pointf {
   float x, y;
@@ -24,3 +28,5 @@ struct Pointf {
   bool operator==(const Pointf& o) const { return x == o.x && y == o.y; };
   bool operator!=(const Pointf& o) const { return !(*this == o); };
 };
+
+std::ostream& operator<< (std::ostream& stream, const Pointf& p);
