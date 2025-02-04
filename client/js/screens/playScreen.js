@@ -2,7 +2,10 @@ const PlayScreen = {
     CELL_SIZE: 25, // pixels
     UPDATE_INTERVAL: 2000, // 2 seconds
     MAX_ZOOM: 2.0, // 200% maximum zoom
-    ZOOM_SPEED: 0.01,
+    BASE_MOVE_SPEED: 20, // Base speed for keyboard movement
+    BASE_ZOOM_SPEED: 0.1, // Base speed for zooming
+    EDGE_SCROLL_THRESHOLD: 20, // Pixels from edge to trigger scrolling
+    EDGE_SCROLL_SPEED: 15, // Base speed for edge scrolling
     updateInterval: null,
     isDragging: false,
     lastX: 0,
@@ -10,6 +13,10 @@ const PlayScreen = {
     offsetX: 0,
     offsetY: 0,
     zoom: 1,
+    pressedKeys: new Set(), // Track currently pressed keys
+    moveAnimationFrame: null, // Track animation frame for movement
+    zoomAnimationFrame: null, // Track animation frame for zooming
+    activeZoom: null, // Direction of active zoom (1 for in, -1 for out, null for none)
 
     // Calculate minimum zoom to ensure grid fills viewport
     calculateMinZoom: function (containerWidth, containerHeight) {
@@ -296,6 +303,93 @@ const PlayScreen = {
 
         if (!container || !grid) return;
 
+        // Clear any existing animation frames when component unmounts
+        window.addEventListener('beforeunload', () => {
+            if (this.moveAnimationFrame) cancelAnimationFrame(this.moveAnimationFrame);
+            if (this.zoomAnimationFrame) cancelAnimationFrame(this.zoomAnimationFrame);
+        });
+
+        // Edge scrolling
+        const updateEdgeScroll = () => {
+            const rect = container.getBoundingClientRect();
+            const mouseX = this.lastX - rect.left;
+            const mouseY = this.lastY - rect.top;
+            let moved = false;
+
+            if (!this.isDragging) { // Only edge scroll when not dragging
+                const speed = this.EDGE_SCROLL_SPEED * (1 / this.zoom);
+
+                if (mouseX < this.EDGE_SCROLL_THRESHOLD) {
+                    this.offsetX += speed;
+                    moved = true;
+                } else if (mouseX > rect.width - this.EDGE_SCROLL_THRESHOLD) {
+                    this.offsetX -= speed;
+                    moved = true;
+                }
+
+                if (mouseY < this.EDGE_SCROLL_THRESHOLD) {
+                    this.offsetY += speed;
+                    moved = true;
+                } else if (mouseY > rect.height - this.EDGE_SCROLL_THRESHOLD) {
+                    this.offsetY -= speed;
+                    moved = true;
+                }
+
+                if (moved) {
+                    this.clampOffset(container);
+                    this.updateGridTransform();
+                }
+            }
+
+            requestAnimationFrame(updateEdgeScroll);
+        };
+
+        // Start edge scrolling loop
+        requestAnimationFrame(updateEdgeScroll);
+
+        // Track mouse position for edge scrolling
+        container.addEventListener('mousemove', (e) => {
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+        });
+
+        // Continuous zoom handling
+        const updateZoom = () => {
+            if (this.activeZoom !== null) {
+                const zoomSpeed = this.calculateZoomSpeed(this.zoom);
+                const delta = this.activeZoom * zoomSpeed;
+                const newZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, this.zoom + delta));
+
+                if (newZoom !== this.zoom) {
+                    // Get container center for zooming
+                    const rect = container.getBoundingClientRect();
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+
+                    // Calculate the point on the grid where we're zooming
+                    const gridX = (centerX - this.offsetX) / this.zoom;
+                    const gridY = (centerY - this.offsetY) / this.zoom;
+
+                    // Calculate new offsets to keep the center point fixed
+                    this.offsetX = centerX - gridX * newZoom;
+                    this.offsetY = centerY - gridY * newZoom;
+
+                    // Update zoom level
+                    this.zoom = newZoom;
+
+                    // If we're at minimum zoom, recenter the grid
+                    if (this.zoom === this.MIN_ZOOM) {
+                        this.centerGrid();
+                    } else {
+                        this.clampOffset(container);
+                        this.updateGridTransform();
+                    }
+                }
+
+                this.zoomAnimationFrame = requestAnimationFrame(updateZoom);
+            }
+        };
+
         // Update minimum zoom on window resize
         window.addEventListener('resize', () => {
             this.centerGrid();
@@ -338,7 +432,8 @@ const PlayScreen = {
 
         // Mouse drag handling
         container.addEventListener('mousedown', (e) => {
-            if (e.button === 0) { // Left click only
+            if (e.button === 1) { // Middle mouse button only
+                e.preventDefault(); // Prevent default middle-click behavior
                 this.isDragging = true;
                 this.lastX = e.clientX;
                 this.lastY = e.clientY;
@@ -361,15 +456,20 @@ const PlayScreen = {
             }
         });
 
-        window.addEventListener('mouseup', () => {
-            this.isDragging = false;
-            container.classList.remove('grabbing');
+        window.addEventListener('mouseup', (e) => {
+            if (this.isDragging) {
+                e.preventDefault(); // Prevent any click events if we were dragging
+                e.stopPropagation();
+                this.isDragging = false;
+                container.classList.remove('grabbing');
+            }
         });
 
-        // Zoom handling
+        // Mouse wheel zoom
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const delta = -Math.sign(e.deltaY) * this.ZOOM_SPEED;
+            const zoomSpeed = this.calculateZoomSpeed(this.zoom);
+            const delta = -Math.sign(e.deltaY) * zoomSpeed;
             const newZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, this.zoom + delta));
 
             if (newZoom !== this.zoom) {
@@ -395,7 +495,6 @@ const PlayScreen = {
                 if (this.zoom === this.MIN_ZOOM) {
                     this.centerGrid();
                 } else {
-                    // Clamp the offsets after zooming to prevent seeing beyond edges
                     this.clampOffset(container);
                     this.updateGridTransform();
                 }
@@ -403,33 +502,80 @@ const PlayScreen = {
         });
 
         // Keyboard movement
-        window.addEventListener('keydown', (e) => {
-            const moveSpeed = 20;
-            switch (e.key.toLowerCase()) {
-                case 'w':
-                case 'arrowup':
+        const updateMovement = () => {
+            if (this.pressedKeys.size > 0) {
+                const moveSpeed = this.calculateMoveSpeed(this.zoom);
+
+                if (this.pressedKeys.has('w') || this.pressedKeys.has('arrowup')) {
                     this.offsetY += moveSpeed;
-                    break;
-                case 's':
-                case 'arrowdown':
+                }
+                if (this.pressedKeys.has('s') || this.pressedKeys.has('arrowdown')) {
                     this.offsetY -= moveSpeed;
-                    break;
-                case 'a':
-                case 'arrowleft':
+                }
+                if (this.pressedKeys.has('a') || this.pressedKeys.has('arrowleft')) {
                     this.offsetX += moveSpeed;
-                    break;
-                case 'd':
-                case 'arrowright':
+                }
+                if (this.pressedKeys.has('d') || this.pressedKeys.has('arrowright')) {
                     this.offsetX -= moveSpeed;
-                    break;
+                }
+
+                this.clampOffset(container);
+                this.updateGridTransform();
+
+                // Continue animation loop only if keys are still pressed
+                this.moveAnimationFrame = requestAnimationFrame(updateMovement);
             }
-            // Clamp the offset values
-            this.clampOffset(container);
-            this.updateGridTransform();
+        };
+
+        // Keyboard zoom and movement
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+
+            // Handle movement keys
+            if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+                if (!this.pressedKeys.has(key)) {
+                    this.pressedKeys.add(key);
+                    // Start animation loop if it's not already running
+                    if (this.pressedKeys.size === 1) {
+                        this.moveAnimationFrame = requestAnimationFrame(updateMovement);
+                    }
+                }
+            }
+
+            // Handle zoom keys
+            if ((key === '=' || key === '+' || key === '-' || key === '_') && this.activeZoom === null) {
+                e.preventDefault(); // Prevent browser zoom
+                this.activeZoom = (key === '=' || key === '+') ? 1 : -1;
+                this.zoomAnimationFrame = requestAnimationFrame(updateZoom);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+
+            // Handle movement keys
+            this.pressedKeys.delete(key);
+            if (this.pressedKeys.size === 0 && this.moveAnimationFrame) {
+                cancelAnimationFrame(this.moveAnimationFrame);
+                this.moveAnimationFrame = null;
+            }
+
+            // Handle zoom keys
+            if ((key === '=' || key === '+' || key === '-' || key === '_') &&
+                ((key === '=' || key === '+') ? 1 : -1) === this.activeZoom) {
+                this.activeZoom = null;
+                if (this.zoomAnimationFrame) {
+                    cancelAnimationFrame(this.zoomAnimationFrame);
+                    this.zoomAnimationFrame = null;
+                }
+            }
         });
 
         // Cell click handling
         grid.addEventListener('click', async (e) => {
+            // Prevent cell interaction if we were just dragging
+            if (this.isDragging) return;
+
             const cell = e.target.closest('.grid-cell');
             if (!cell) return;
 
@@ -451,6 +597,10 @@ const PlayScreen = {
 
         grid.addEventListener('contextmenu', async (e) => {
             e.preventDefault();
+
+            // Prevent cell interaction if we were just dragging
+            if (this.isDragging) return;
+
             const cell = e.target.closest('.grid-cell');
             if (!cell) return;
 
@@ -498,5 +648,18 @@ const PlayScreen = {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
         }
+    },
+
+    // Calculate zoom speed based on current zoom level
+    calculateZoomSpeed: function (currentZoom) {
+        // Slower zooming at higher zoom levels for finer control
+        // Faster zooming at lower zoom levels for quick overview changes
+        return this.BASE_ZOOM_SPEED * (1 / (currentZoom * 2));
+    },
+
+    // Calculate movement speed based on current zoom level
+    calculateMoveSpeed: function (currentZoom) {
+        // Faster movement when zoomed out, slower when zoomed in
+        return this.BASE_MOVE_SPEED * (1 / currentZoom);
     }
 }; 
