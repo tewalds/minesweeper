@@ -1,6 +1,6 @@
 const PlayScreen = {
     CELL_SIZE: 25, // pixels
-    UPDATE_INTERVAL: 2000, // 2 seconds
+    UPDATE_INTERVAL: 100,
     MAX_ZOOM: 2.0, // 200% maximum zoom
     MIN_ZOOM_CAP: 0.5, // Never zoom out beyond 50%
     BASE_MOVE_SPEED: 20, // Base speed for keyboard movement
@@ -114,75 +114,162 @@ const PlayScreen = {
     },
 
     getPlayerDirection: function (playerX, playerY) {
-        const dx = playerX - GameState.currentUser.x;
-        const dy = playerY - GameState.currentUser.y;
+        // Convert grid coordinates to screen coordinates
+        const container = document.querySelector('.game-container');
+        if (!container) return 0;
 
-        // Determine the primary direction based on which delta is larger
-        if (Math.abs(dx) > Math.abs(dy)) {
-            return dx > 0 ? 'right' : 'left';
-        } else {
-            return dy > 0 ? 'bottom' : 'top';
+        // Get current viewport center in grid coordinates
+        const rect = container.getBoundingClientRect();
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE - gridCenterX;
+        const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE - gridCenterY;
+
+        // Calculate direction from viewport center to player
+        const dx = playerX - viewportCenterX;
+        const dy = playerY - viewportCenterY;
+
+        return Math.atan2(dy, dx);
+    },
+
+    // Calculate if a player is visible in the current viewport
+    isPlayerVisible: function (playerX, playerY, container) {
+        if (!container) return false;
+
+        const bounds = this.getVisibleBounds(container);
+        if (!bounds) return false;
+
+        // Add a small margin to the bounds
+        const margin = 2;
+        return playerX >= bounds.left - margin &&
+            playerX <= bounds.right + margin &&
+            playerY >= bounds.top - margin &&
+            playerY <= bounds.bottom + margin;
+    },
+
+    // Calculate screen position for a player
+    calculatePlayerScreenPosition: function (playerX, playerY, container) {
+        if (!container) return null;
+
+        const rect = container.getBoundingClientRect();
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+
+        // Convert grid coordinates to screen coordinates, accounting for centered origin
+        const screenX = this.offsetX + ((playerX + gridCenterX) * this.CELL_SIZE * this.zoom);
+        const screenY = this.offsetY + ((playerY + gridCenterY) * this.CELL_SIZE * this.zoom);
+
+        return {
+            x: screenX,
+            y: screenY,
+            isOnScreen: screenX >= 0 && screenX <= rect.width && screenY >= 0 && screenY <= rect.height
+        };
+    },
+
+    // Calculate position on screen edge for an angle
+    calculateEdgePosition: function (angle, container) {
+        const margin = 20; // Margin from screen edge
+        const width = container.clientWidth - margin * 2;
+        const height = container.clientHeight - margin * 2;
+
+        // Normalize angle to 0-2π range
+        const normalizedAngle = (angle + 2 * Math.PI) % (2 * Math.PI);
+
+        // Calculate position on screen edge
+        let x, y;
+
+        // Right edge
+        if (normalizedAngle < Math.PI / 4 || normalizedAngle > 7 * Math.PI / 4) {
+            x = width + margin;
+            y = height / 2 + margin + Math.tan(normalizedAngle) * width / 2;
         }
+        // Bottom edge
+        else if (normalizedAngle < 3 * Math.PI / 4) {
+            y = height + margin;
+            x = width / 2 + margin + Math.tan(Math.PI / 2 - normalizedAngle) * height / 2;
+        }
+        // Left edge
+        else if (normalizedAngle < 5 * Math.PI / 4) {
+            x = margin;
+            y = height / 2 + margin - Math.tan(normalizedAngle) * width / 2;
+        }
+        // Top edge
+        else {
+            y = margin;
+            x = width / 2 + margin - Math.tan(Math.PI / 2 - normalizedAngle) * height / 2;
+        }
+
+        // Clamp positions to screen bounds
+        x = Math.max(margin, Math.min(width + margin, x));
+        y = Math.max(margin, Math.min(height + margin, y));
+
+        return { x, y, angle: normalizedAngle };
+    },
+
+    // Get arrow character for angle
+    getDirectionArrow: function (angle) {
+        // Convert angle to 8-direction arrow
+        const normalizedAngle = (angle + 2 * Math.PI) % (2 * Math.PI);
+        const sector = Math.round(normalizedAngle / (Math.PI / 4));
+
+        const arrows = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗', '→'];
+        return arrows[sector];
     },
 
     renderPlayers: async function () {
         const onlinePlayers = await MockDB.getOnlinePlayers();
         const indicatorsContainer = document.querySelector('.player-indicators');
+        const container = document.querySelector('.game-container');
 
-        // Safety check
-        if (!indicatorsContainer) {
-            console.error('Player indicators container not found');
+        if (!indicatorsContainer || !container) {
+            console.error('Required containers not found');
             return;
         }
 
         indicatorsContainer.innerHTML = '';
 
-        // Group players by direction
-        const playersByDirection = {};
-
+        // Create and position indicators for each player
         onlinePlayers.forEach(player => {
-            if (player.username === GameState.currentUser.username) return; // Skip current player
+            if (player.username === GameState.currentUser.username) return;
 
-            const direction = this.getPlayerDirection(player.position.x, player.position.y);
+            const isVisible = this.isPlayerVisible(player.position.x, player.position.y, container);
+            const screenPos = this.calculatePlayerScreenPosition(player.position.x, player.position.y, container);
 
-            if (!playersByDirection[direction]) {
-                playersByDirection[direction] = [];
-            }
-            playersByDirection[direction].push(player);
-        });
-
-        // Create indicators for each direction
-        Object.entries(playersByDirection).forEach(([direction, players]) => {
-            const directionContainer = document.createElement('div');
-            directionContainer.className = `direction-container ${direction}`;
-
-            players.forEach(player => {
-                const score = MinesweeperDB.getScore(player.username);
+            if (isVisible && screenPos) {
+                // Player is visible on screen, show actual position
                 const indicator = document.createElement('div');
                 indicator.className = 'player-indicator';
+                indicator.style.left = `${screenPos.x}px`;
+                indicator.style.top = `${screenPos.y}px`;
+
                 indicator.innerHTML = `
-                    <div class="indicator-content" style="color: ${player.color}">
-                        <span class="indicator-arrow">${this.getDirectionArrow(direction)}</span>
-                        <span class="indicator-avatar">${player.avatar}</span>
-                        <span class="indicator-name">${player.username}</span>
-                        <span class="indicator-score">${score}</span>
-                    </div>
+                    <span class="indicator-avatar" style="background-color: ${player.color}20">${player.avatar}</span>
+                    <span class="indicator-name">${player.username}</span>
+                    <span class="indicator-score">${MinesweeperDB.getScore(player.username)}</span>
                 `;
-                directionContainer.appendChild(indicator);
-            });
 
-            indicatorsContainer.appendChild(directionContainer);
+                indicatorsContainer.appendChild(indicator);
+            } else {
+                // Player is off screen, show edge indicator
+                const angle = this.getPlayerDirection(player.position.x, player.position.y);
+                const pos = this.calculateEdgePosition(angle, container);
+                const score = MinesweeperDB.getScore(player.username);
+
+                const indicator = document.createElement('div');
+                indicator.className = 'player-indicator';
+                indicator.style.left = `${pos.x}px`;
+                indicator.style.top = `${pos.y}px`;
+
+                indicator.innerHTML = `
+                    <span class="indicator-arrow">${this.getDirectionArrow(pos.angle)}</span>
+                    <span class="indicator-avatar" style="background-color: ${player.color}20">${player.avatar}</span>
+                    <span class="indicator-name">${player.username}</span>
+                    <span class="indicator-score">${score}</span>
+                `;
+
+                indicatorsContainer.appendChild(indicator);
+            }
         });
-    },
-
-    getDirectionArrow: function (direction) {
-        const arrows = {
-            top: '↑',
-            right: '→',
-            bottom: '↓',
-            left: '←'
-        };
-        return arrows[direction];
     },
 
     renderMinesweeperState: async function () {
@@ -213,7 +300,7 @@ const PlayScreen = {
             // Ensure current zoom is not below minimum
             this.zoom = Math.max(this.zoom, this.MIN_ZOOM);
 
-            // Calculate the center position
+            // Calculate the center position, accounting for centered origin
             this.offsetX = (gameContainer.clientWidth - gridWidth * this.zoom) / 2;
             this.offsetY = (gameContainer.clientHeight - gridHeight * this.zoom) / 2;
 
@@ -618,19 +705,21 @@ const PlayScreen = {
 
         const rect = container.getBoundingClientRect();
         const scale = 1 / this.zoom;
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
 
-        // Convert screen coordinates to grid coordinates
-        let left = Math.floor((-this.offsetX * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
-        let top = Math.floor((-this.offsetY * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
-        let right = Math.ceil((rect.width * scale - this.offsetX * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
-        let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
+        // Convert screen coordinates to grid coordinates, accounting for centered origin
+        let left = Math.floor((-this.offsetX * scale) / this.CELL_SIZE) - this.RENDER_MARGIN - gridCenterX;
+        let top = Math.floor((-this.offsetY * scale) / this.CELL_SIZE) - this.RENDER_MARGIN - gridCenterY;
+        let right = Math.ceil((rect.width * scale - this.offsetX * scale) / this.CELL_SIZE) + this.RENDER_MARGIN - gridCenterX;
+        let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN - gridCenterY;
 
-        // Clamp to grid boundaries
+        // Clamp to grid boundaries, accounting for centered origin
         return {
-            left: Math.max(0, left),
-            top: Math.max(0, top),
-            right: Math.min(MinesweeperDB.gridWidth, right),
-            bottom: Math.min(MinesweeperDB.gridHeight, bottom)
+            left: Math.max(-gridCenterX, left),
+            top: Math.max(-gridCenterY, top),
+            right: Math.min(gridCenterX, right),
+            bottom: Math.min(gridCenterY, bottom)
         };
     },
 
@@ -750,8 +839,12 @@ const PlayScreen = {
         cell.className = 'grid-cell';
         cell.dataset.x = x;
         cell.dataset.y = y;
-        cell.style.gridColumn = x + 1;
-        cell.style.gridRow = y + 1;
+
+        // Offset grid coordinates to center 0,0
+        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
+        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        cell.style.gridColumn = x + gridCenterX + 1;
+        cell.style.gridRow = y + gridCenterY + 1;
         return cell;
     }
 }; 

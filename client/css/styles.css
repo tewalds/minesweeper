@@ -321,74 +321,60 @@ button:disabled {
     z-index: 1000;
 }
 
-.direction-container {
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 10px;
-    z-index: 1000;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: 4px;
-    min-width: 120px;
-}
-
-.direction-container.top {
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.direction-container.bottom {
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.direction-container.left {
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.direction-container.right {
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
 .player-indicator {
+    position: absolute;
     background: rgba(255, 255, 255, 0.9);
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px 10px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     pointer-events: auto;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.indicator-content {
+    font-size: 12px;
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 14px;
+    gap: 4px;
     white-space: nowrap;
+    transform: translate(-50%, -50%);
+    transition: all 0.2s ease-out;
+    z-index: 1000;
+}
+
+/* Edge indicators are slightly more prominent */
+.player-indicator:has(.indicator-arrow) {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.player-indicator:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+    z-index: 1001;
 }
 
 .indicator-arrow {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
 }
 
 .indicator-avatar {
-    font-size: 18px;
+    font-size: 14px;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.indicator-name {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .indicator-score {
     background: rgba(0, 0, 0, 0.1);
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 12px;
-    margin-left: 5px;
+    padding: 1px 4px;
+    border-radius: 8px;
+    font-size: 10px;
 }
 
 /* Screen Header Layout */
@@ -492,4 +478,9 @@ button:disabled {
 /* Remove old back button styles */
 .back-button {
     position: static;
+}
+
+/* Remove old direction container styles */
+.direction-container {
+    display: none;
 }
