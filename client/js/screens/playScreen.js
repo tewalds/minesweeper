@@ -676,6 +676,59 @@ const PlayScreen = {
             this.lastY = e.clientY;
         });
 
+        // Cell click handling for revealing cells
+        const handleCellClick = async (e) => {
+            // Prevent cell interaction if we were just dragging
+            if (this.isDragging) return;
+
+            const cell = e.target.closest('.grid-cell');
+            if (!cell) return;
+
+            const x = parseInt(cell.dataset.x);
+            const y = parseInt(cell.dataset.y);
+            const key = `${x},${y}`;
+
+            // Check if cell has any flag
+            const marker = MinesweeperDB.mines.markers.get(key);
+            if (marker) {
+                // Block click if there's any flag
+                return;
+            }
+
+            // Otherwise proceed with reveal
+            await MinesweeperDB.revealCell(x, y, GameState.currentUser.username);
+            await this.renderMinesweeperState();
+        };
+
+        // Cell right click handling for flags
+        const handleCellRightClick = async (e) => {
+            e.preventDefault();
+
+            // Prevent cell interaction if we were just dragging
+            if (this.isDragging) return;
+
+            const cell = e.target.closest('.grid-cell');
+            if (!cell) return;
+
+            const x = parseInt(cell.dataset.x);
+            const y = parseInt(cell.dataset.y);
+            const key = `${x},${y}`;
+
+            // Check if cell has any flag
+            const marker = MinesweeperDB.mines.markers.get(key);
+            if (marker) {
+                // Remove any flag
+                await MinesweeperDB.toggleMarker(x, y, marker.username, marker.avatar);
+            } else {
+                // Add my flag
+                await MinesweeperDB.setMarker(x, y, GameState.currentUser.username, GameState.currentUser.avatar);
+            }
+            await this.renderMinesweeperState();
+        };
+
+        grid.addEventListener('click', handleCellClick);
+        grid.addEventListener('contextmenu', handleCellRightClick);
+
         // Continuous zoom handling
         const updateZoom = () => {
             if (this.activeZoom !== null) {
@@ -911,55 +964,6 @@ const PlayScreen = {
                     this.zoomAnimationFrame = null;
                 }
             }
-        });
-
-        // Cell click handling
-        grid.addEventListener('click', async (e) => {
-            // Prevent cell interaction if we were just dragging
-            if (this.isDragging) return;
-
-            const cell = e.target.closest('.grid-cell');
-            if (!cell) return;
-
-            const x = parseInt(cell.dataset.x);
-            const y = parseInt(cell.dataset.y);
-            const key = `${x},${y}`;
-
-            // Check if cell has any flag
-            const marker = MinesweeperDB.mines.markers.get(key);
-            if (marker) {
-                // Block click if there's any flag
-                return;
-            }
-
-            // Otherwise proceed with reveal
-            await MinesweeperDB.revealCell(x, y, GameState.currentUser.username);
-            await this.renderMinesweeperState();
-        });
-
-        grid.addEventListener('contextmenu', async (e) => {
-            e.preventDefault();
-
-            // Prevent cell interaction if we were just dragging
-            if (this.isDragging) return;
-
-            const cell = e.target.closest('.grid-cell');
-            if (!cell) return;
-
-            const x = parseInt(cell.dataset.x);
-            const y = parseInt(cell.dataset.y);
-            const key = `${x},${y}`;
-
-            // Check if cell has any flag
-            const marker = MinesweeperDB.mines.markers.get(key);
-            if (marker) {
-                // Remove any flag
-                await MinesweeperDB.toggleMarker(x, y, marker.username, marker.avatar);
-            } else {
-                // Add my flag
-                await MinesweeperDB.setMarker(x, y, GameState.currentUser.username, GameState.currentUser.avatar);
-            }
-            await this.renderMinesweeperState();
         });
     },
 
