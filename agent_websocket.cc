@@ -9,6 +9,10 @@
 
 AgentWebSocket::AgentWebSocket(Pointi dims, int port, int first_user)
     : client_map_(), next_userid_(first_user), state_(dims) {
+
+  server_.clear_access_channels(websocketpp::log::alevel::all);
+  server_.clear_error_channels(websocketpp::log::elevel::all);
+
   server_.init_asio();
 
   server_.set_open_handler([this](auto a) { return this->on_open(a); });
@@ -29,6 +33,7 @@ AgentWebSocket::~AgentWebSocket() {
 }
 
 void AgentWebSocket::reset() {
+  state_.fill({HIDDEN, 0});
   for (auto& client_it : client_map_) {
     send(client_it.first, "reset");
   }
@@ -65,6 +70,7 @@ void AgentWebSocket::on_open(
   std::cout << "Connection opened" << std::endl;
   int userid = next_userid_++;
   client_map_[hdl] = {"", userid};
+  send(hdl, absl::StrFormat("grid %i %i %i", state_.width(), state_.height(), userid));
 }
 
 void AgentWebSocket::on_message(
@@ -81,6 +87,7 @@ void AgentWebSocket::on_message(
     std::string name;
     iss >> name;
     client_map_[hdl].name = name;
+    std::cout << absl::StrFormat("New user id: %i, name: %s\n", client_map_[hdl].userid, name);
     broadcast(absl::StrFormat("join %d %s", client_map_[hdl].userid, name));
 
     // Dump the state. TODO: Send in a more compact format.

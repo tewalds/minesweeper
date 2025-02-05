@@ -1,6 +1,11 @@
 
 #include "agent_last.h"
 
+#include <cmath>
+#include <iostream>
+
+#include <absl/random/distributions.h>
+
 #include "minesweeper.h"
 #include "point.h"
 

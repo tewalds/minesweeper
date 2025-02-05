@@ -1,7 +1,3 @@
-EXEC = minesweeper
-
-OBJECTS = agent_last.o agent_random.o agent_sfml.o agent_websocket.o \
-          env.o kdtree.o minesweeper.o point.o
 
 # https://www.gnu.org/software/make/manual/html_node/Implicit-Variables.html
 # CXX = g++
@@ -21,21 +17,25 @@ LDLIBS += $$(pkg-config absl_flat_hash_map --libs)
 LDLIBS += $$(pkg-config absl_random_random --libs)
 LDLIBS += $$(pkg-config absl_strings --libs)
 
-all: $(EXEC)
+all: minesweeper minesweeper-client
 
-$(EXEC): $(OBJECTS)
+minesweeper: agent_last.o agent_random.o agent_sfml.o agent_websocket.o \
+          env.o kdtree.o minesweeper.o point.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+minesweeper-client: agent_sfml.o minesweeper-client.o point.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 run: all
-	./$(EXEC)
+	./minesweeper
 
 clean:
-	rm -f *.o $(EXEC)
+	rm -f *.o minesweeper minesweeper-client
 
 fresh: clean all
 
 installdeps:
-	sudo apt install clang libabsl-dev libsfml-dev libwebsocketpp-dev
+	sudo apt install build-essential clang libabsl-dev libboost-all-dev libsfml-dev libwebsocketpp-dev
 
 gendeps:
 	ls *.cc -1 | xargs -L 1 cpp -M -MM
@@ -50,6 +50,8 @@ agent_websocket.o: agent_websocket.cc agent_websocket.h agent.h \
  minesweeper.h point.h
 env.o: env.cc env.h kdtree.h point.h minesweeper.h
 kdtree.o: kdtree.cc kdtree.h point.h
-minesweeper.o: minesweeper.cc agent.h minesweeper.h point.h env.h \
- kdtree.h
+minesweeper.o: minesweeper.cc agent.h minesweeper.h point.h agent_last.h \
+ kdtree.h agent_random.h agent_sfml.h agent_websocket.h env.h
+minesweeper-client.o: minesweeper-client.cc agent_sfml.h agent.h \
+ minesweeper.h point.h
 point.o: point.cc point.h
