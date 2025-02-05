@@ -85,15 +85,15 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
           return {QUIT, {0, 0}, user_};
 
         case sf::Event::KeyPressed:
-          switch (event.key.scancode) {
-            case sf::Keyboard::Scan::Escape:
-            case sf::Keyboard::Scan::Q:
+          switch (event.key.code) {
+            case sf::Keyboard::Escape:
+            case sf::Keyboard::Q:
               return {QUIT, {0, 0}, user_};
 
-            case sf::Keyboard::Scan::Space:
+            case sf::Keyboard::Space:
               return {PAUSE, {0, 0}, user_};
 
-            case sf::Keyboard::Scan::R:
+            case sf::Keyboard::R:
               return {RESET, {0, 0}, user_};
 
             default:
