@@ -81,12 +81,7 @@ Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
   if (!paused) {
     // if (!actions_.empty() && absl::Uniform(bitgen_, 0, 1000) == 0) {
     //   actions_.validate();
-    //   std::cout << "size: " << actions_.size()
-    //             << " max depth: " << actions_.depth_max()
-    //             << " avg depth: " << actions_.depth_avg()
-    //             << " std dev: " << actions_.depth_stddev()
-    //             << " balance: " << actions_.balance_factor() << std::endl;
-    //   // actions_.print_tree();
+    //   std::cout << actions_.balance_str() << actions_;
     // }
 
     while (!actions_.empty()) {
@@ -94,18 +89,14 @@ Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
       // KDTree::Value a = actions_.find_closest(
           // Rounding fixes a systematic bias towards the top left from truncating.
           {int(std::round(rolling_action_.x)),
-          int(std::round(rolling_action_.y))});
-      std::cout << a.p.x << "," << a.p.y << std::endl;
+           int(std::round(rolling_action_.y))});
       if (state_[a.p] == HIDDEN) {
-        std::cout << "return\n";
         return {ActionType(a.value), a.p, user_};
-      // } else {
-      //   // actions_.validate();
-      //   std::cout << "remove " << (actions_.remove(a.p) ? "success" : "failure") << "\n";
+      } else {
+        actions_.remove(a.p);
       }
     }
   }
 
-  // std::cout << "send PASS\n";
   return Action{PASS, {0, 0}, user_};
 }

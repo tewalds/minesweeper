@@ -14,6 +14,7 @@ struct Pointi {
 
   bool operator==(const Pointi& o) const { return x == o.x && y == o.y; };
   bool operator!=(const Pointi& o) const { return !(*this == o); };
+  bool operator<(const Pointi& o) const { return x != o.x ? x < o.x : y < o.y; };
 };
 
 std::ostream& operator<< (std::ostream& stream, const Pointi& p);
@@ -27,6 +28,7 @@ struct Pointf {
 
   bool operator==(const Pointf& o) const { return x == o.x && y == o.y; };
   bool operator!=(const Pointf& o) const { return !(*this == o); };
+  bool operator<(const Pointf& o) const { return x != o.x ? x < o.x : y < o.y; };
 };
 
 std::ostream& operator<< (std::ostream& stream, const Pointf& p);

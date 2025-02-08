@@ -20,22 +20,24 @@ TEST_CASE("KDtree", "[kdtree]") {
     if (missing) {
       points.push_back(p);
     }
-    std::ostringstream before;
-    tree.print_tree(before);
-    CAPTURE(before.str(), points, i, p);
+    CAPTURE(points, i, p);
+    INFO("Before:\n" << tree);
     bool inserted = tree.insert({i, p});
 
-    std::ostringstream after;
-    tree.print_tree(after);
-    CAPTURE(after.str());
+    INFO("After:\n" << tree);
+
+    REQUIRE(tree.exists(p));
+    if (inserted) {
+      REQUIRE(tree.find(p)->value == i);
+    }
 
     REQUIRE(inserted == missing);
     REQUIRE(tree.validate());
   }
 
-  INFO("Tree: " << tree);
+  INFO("Tree: \n" << tree);
 
-  std::vector<KDTree::Value> values = tree.collect_values();
+  std::vector<KDTree::Value> values(tree.begin(), tree.end());
   REQUIRE(points.size() == tree.size());
   REQUIRE(points.size() == values.size());
 
@@ -54,6 +56,22 @@ TEST_CASE("KDtree", "[kdtree]") {
     REQUIRE(tree.validate());
   }
 
+  SECTION("Find/exists works") {
+    for (int x = 0; x < 10; x++) {
+      for (int y = 0; y < 10; y++) {
+        int index = absl::c_find(points, Pointi(x, y)) - points.begin();
+        bool exists = (index != points.size());
+        INFO("Find " << Pointi(x, y) << ", exists: " << exists << ", index: " << index << "\n" << tree);
+        REQUIRE(exists == tree.exists({x, y}));
+        auto value = tree.find({x, y});
+        REQUIRE(exists == bool(value));
+        if (exists) {
+          REQUIRE(points[index] == value->p);
+        }
+      }
+    }
+  }
+
   SECTION("Finding a known value returns that value") {
     for (KDTree::Value v : values) {
       REQUIRE(tree.find_closest(v.p) == v);
@@ -64,7 +82,11 @@ TEST_CASE("KDtree", "[kdtree]") {
     for (int x = 0; x < 10; x++) {
       for (int y = 0; y < 10; y++) {
         INFO("Remove " << Pointi(x, y) << "\n" << tree);
-        REQUIRE(absl::c_linear_search(points, Pointi(x, y)) == tree.remove({x, y}));
+        bool exists = absl::c_linear_search(points, Pointi(x, y));
+        int size = tree.size();
+        REQUIRE(exists == tree.remove({x, y}));
+        REQUIRE(size - exists == tree.size());
+        INFO("after\n" << tree);
         REQUIRE(tree.validate());
       }
     }
@@ -74,7 +96,6 @@ TEST_CASE("KDtree", "[kdtree]") {
   SECTION("pop works") {
     REQUIRE(tree.size() == points.size());
     while (!tree.empty()) {
-      // KDTree::Value closest = 
       tree.pop_closest({3, 4});
       REQUIRE(tree.validate());
     }

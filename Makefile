@@ -11,6 +11,7 @@ CPPFLAGS += -fvisibility=hidden -Bsymbolic  # https://www.youtube.com/watch?v=_e
 # LDFLAGS += -pg -g
 
 LDLIBS = -lsfml-graphics -lsfml-window -lsfml-system
+LDLIBS += $$(pkg-config absl_algorithm_container --libs)
 LDLIBS += $$(pkg-config absl_flags --libs)
 LDLIBS += $$(pkg-config absl_flags_parse --libs)
 LDLIBS += $$(pkg-config absl_flat_hash_map --libs)
@@ -19,18 +20,41 @@ LDLIBS += $$(pkg-config absl_strings --libs)
 
 all: minesweeper minesweeper-client
 
-minesweeper: agent_last.o agent_random.o agent_sfml.o agent_websocket.o \
-          env.o kdtree.o minesweeper.o point.o
+minesweeper: \
+		agent_last.o \
+		agent_random.o \
+		agent_sfml.o \
+		agent_websocket.o \
+		env.o \
+		kdtree.o \
+		minesweeper.o \
+		point.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-minesweeper-client: agent_sfml.o minesweeper-client.o point.o
+minesweeper-client: \
+		agent_sfml.o \
+		minesweeper-client.o \
+		point.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test: \
+		catch_amalgamated.o \
+		kdtree.o \
+		kdtree_test.o \
+		point.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LOADLIBES) $(LDLIBS)
 
 run: all
 	./minesweeper
 
+run_test: test
+	./test
+
 clean:
-	rm -f *.o minesweeper minesweeper-client
+	rm -f *.o \
+		minesweeper \
+		minesweeper-client \
+		test
 
 fresh: clean all
 
@@ -48,8 +72,10 @@ agent_random.o: agent_random.cc agent_random.h agent.h minesweeper.h \
 agent_sfml.o: agent_sfml.cc agent_sfml.h agent.h minesweeper.h point.h
 agent_websocket.o: agent_websocket.cc agent_websocket.h agent.h \
  minesweeper.h point.h
+catch_amalgamated.o: catch_amalgamated.cc catch_amalgamated.h
 env.o: env.cc env.h kdtree.h point.h minesweeper.h
 kdtree.o: kdtree.cc kdtree.h point.h
+kdtree_test.o: kdtree_test.cc catch_amalgamated.h kdtree.h point.h
 minesweeper.o: minesweeper.cc agent.h minesweeper.h point.h agent_last.h \
  kdtree.h agent_random.h agent_sfml.h agent_websocket.h env.h
 minesweeper-client.o: minesweeper-client.cc agent_sfml.h agent.h \

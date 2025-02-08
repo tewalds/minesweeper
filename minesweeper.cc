@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
     agents.push_back(std::make_unique<AgentSFML>(dims, agents.size() + 1, absl::GetFlag(FLAGS_window)));
   }
   for (int i = 0; i < absl::GetFlag(FLAGS_agents); i++) {
-    agents.push_back(std::make_unique<AgentRandom>(dims, agents.size() + 1));
-    // currently broken: agents.push_back(std::make_unique<AgentLast>(dims, agents.size() + 1));
+    // agents.push_back(std::make_unique<AgentRandom>(dims, agents.size() + 1));
+    agents.push_back(std::make_unique<AgentLast>(dims, agents.size() + 1));
   }
   if (absl::GetFlag(FLAGS_port) > 0) {
     agents.push_back(std::make_unique<AgentWebSocket>(dims, absl::GetFlag(FLAGS_port), agents.size() + 1));

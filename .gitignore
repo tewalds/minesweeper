@@ -104,4 +104,5 @@ ENV/
 *.o
 minesweeper
 minesweeper-client
+test
 .vscode

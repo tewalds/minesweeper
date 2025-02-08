@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 
+#include "absl/strings/str_format.h"
+
 #include "kdtree.h"
 
 
@@ -30,59 +32,104 @@ void KDTree::clear() {
   count = 0;
 }
 
-bool KDTree::insert(Value v) {
-  if (sum_depth > std::bit_width((unsigned)count) * count) {
-    // `bit_width(count)` is the max depth for a complete balanced tree.
-    // `sum_depth / count` is the average depth, which should be a 1-2 less than the max for a
-    // balanced tree, but will exceed that if it's suffiently unbalanced.
-    // Move `/ count` to the other side to avoid division, in particular by 0.
-    // There may be better metrics for how balanced a tree is, but this one is cheap and easy to
-    // compute incrementally and seems to work.
-    rebalance();
-  }
-  return insert(root, v, 0);
+KDTree::Iterator KDTree::begin() const {
+  return KDTree::Iterator(root.get());
+}
+KDTree::Iterator KDTree::end() const {
+  return KDTree::Iterator();
 }
 
-bool KDTree::insert(std::unique_ptr<Node> &node, const Value &v, int depth) {
-  if (!node) {
-    node = std::make_unique<Node>(v, depth);
-    count += 1;
-    sum_depth += depth;
-    return true;
+KDTree::Iterator::Iterator() {}
+KDTree::Iterator::Iterator(const KDTree::Node* n) {
+  stack.push_back(n);
+}
+
+const KDTree::Value& KDTree::Iterator::operator*() const {
+  assert(!stack.empty());
+  return stack.back()->value;
+}
+const KDTree::Value* KDTree::Iterator::operator->() const {
+  assert(!stack.empty());
+  return &stack.back()->value;
+}
+
+KDTree::Iterator& KDTree::Iterator::operator++() {
+  assert(!stack.empty());
+  const Node* node = stack.back();
+  stack.pop_back();
+  if (node->children[1]) {
+    stack.push_back(node->children[1].get());
+  }
+  if (node->children[0]) {
+    stack.push_back(node->children[0].get());
+  }
+  return *this;
+}
+KDTree::Iterator KDTree::Iterator::operator++(int){
+  auto tmp = *this;
+  ++*this;
+  return tmp;
+}
+
+
+bool KDTree::insert(Value v) {
+  std::unique_ptr<Node>* node = &root;
+  int depth = 0;
+  while (*node) {
+    if ((*node)->value.p == v.p) {
+      return false; // Value already exists
+    }
+    int axis = depth % 2;
+    int child = (v.p.coords[axis] < (*node)->value.p.coords[axis] ? 0 : 1);
+    node = &(*node)->children[child];
+    depth += 1;
+  }
+  *node = std::make_unique<Node>(v, depth);
+  count += 1;
+  sum_depth += depth;
+
+  if (sum_depth > std::bit_width((unsigned)count) * count + 1) {
+    // `bit_width(count)` is the max depth for a complete balanced tree.
+    // `sum_depth / count` is the average depth, which should be a 1-2 less than the
+    // max for a balanced tree, but will exceed that if it's suffiently unbalanced.
+    // Move `/ count` to the other side to avoid division, in particular by 0.
+    // There may be better metrics for how balanced a tree is, but this one is cheap
+    // and easy to compute incrementally and seems to work.
+    rebalance();
   }
 
-  if (node->value.p == v.p) {
-    return false;  // Value already exists at this location
-  }
-
-  int axis = depth % 2;
-  if (v.p.coords[axis] < node->value.p.coords[axis]) {
-    return insert(node->children[0], v, depth + 1);
-  } else {
-    return insert(node->children[1], v, depth + 1);
-  }
+  return true;
 }
 
 bool KDTree::remove(Pointi p) {
-  return remove(root, p);
+  std::unique_ptr<Node>* node = &root;
+  while (*node) {
+    if ((*node)->value.p == p) {
+      remove_node(*node);
+      return true;
+    }
+    int axis = (*node)->depth % 2;
+    int child = (p.coords[axis] < (*node)->value.p.coords[axis] ? 0 : 1);
+    node = &(*node)->children[child];
+  }
+  return false;
 }
 
-bool KDTree::remove(std::unique_ptr<Node> &node, Pointi p) {
-  if (!node) {
-    return false;
-  }
+bool KDTree::exists(Pointi p) const {
+  return bool(find(p));
+}
 
-  if (node->value.p == p) {
-    remove_node(node);
-    return true;
+std::optional<KDTree::Value> KDTree::find(Pointi p) const {
+  Node* node = root.get();
+  while (node) {
+    if (node->value.p == p) {
+      return node->value;
+    }
+    int axis = node->depth % 2;
+    int child = (p.coords[axis] < node->value.p.coords[axis] ? 0 : 1);
+    node = node->children[child].get();
   }
-
-  int axis = node->depth % 2;
-  if (p.coords[axis] < node->value.p.coords[axis]) {
-    return remove(node->children[0], p);
-  } else {
-    return remove(node->children[1], p);
-  }
+  return {};
 }
 
 KDTree::Value KDTree::find_closest(Pointi p) {
@@ -100,7 +147,6 @@ void KDTree::find_closest(
   if (!*node) return;
 
   int dist = distance(p, (*node)->value.p);
-  // std::cout << "dist: " << dist << " " << (*node)->value << "\n";
   if (dist < best_dist) {
     best_dist = dist;
     best_node = node;
@@ -114,26 +160,26 @@ void KDTree::find_closest(
   }
 }
 
-void KDTree::find_closest_along_axis(
+void KDTree::find_leftmost_along_axis(
     std::unique_ptr<Node> *node, int coord, int axis, int &best_dist,
     std::unique_ptr<Node> *&best_node) const {
   if (!*node) return;
 
-  int dist = std::abs(coord - (*node)->value.p.coords[axis]);
-  if (dist < best_dist) {
+  int dist = (*node)->value.p.coords[axis] - coord;
+  if (dist < best_dist ||
+      (dist == best_dist && (!best_node || (*node)->depth > (*best_node)->depth))) {
+    // Prioritizing the deepest means less cascading of intermediate nodes being replaced
+    // by deeper nodes, or rebuilding a smaller tree.
     best_dist = dist;
     best_node = node;
   }
 
-  if (axis == (*node)->depth % 2) {
-    int first = (coord < (*node)->value.p.coords[axis]) ? 0 : 1;
-    find_closest_along_axis(&(*node)->children[first], coord, axis, best_dist, best_node);
-    if (std::abs(coord - (*node)->value.p.coords[axis]) < best_dist) {
-      find_closest_along_axis(&(*node)->children[!first], coord, axis, best_dist, best_node);
-    }
-  } else {
-    find_closest_along_axis(&(*node)->children[0], coord, axis, best_dist, best_node);
-    find_closest_along_axis(&(*node)->children[1], coord, axis, best_dist, best_node);
+  find_leftmost_along_axis(&(*node)->children[0], coord, axis, best_dist, best_node);
+  if (axis != (*node)->depth % 2) {
+    // No need to search the right side if we're searching along the axis as they have
+    // values greater or equal than this node. It's plausible there's a deeper node with
+    // equal value, but it's probably not worth the effort to search for.
+    find_leftmost_along_axis(&(*node)->children[1], coord, axis, best_dist, best_node);
   }
 }
 
@@ -148,21 +194,36 @@ void KDTree::remove_node(std::unique_ptr<Node> &node) {
     node.reset();
     return;
   }
+  // It is valid to replace this node with any of the leftmost nodes in the right subtree.
+  // It is NOT valid to replace this node with the rightmost node of the left subtree,
+  // as promoting that node would break the invariant for all nodes that have a value
+  // equal to it along that axis, so they'd need to move from the left subtree to the
+  // right subtree. Finding all of those would be a pain, so just rebuild instead.
+  if (node->children[1]) {
+    std::unique_ptr<Node> *best_node = nullptr;
+    int best_dist = std::numeric_limits<int>::max();
+    int axis = node->depth % 2;
+    int coord = node->value.p.coords[axis];
+    find_leftmost_along_axis(&node->children[1], coord, axis, best_dist, best_node);
 
-  std::unique_ptr<Node> *best_node = nullptr;
-  int best_dist = std::numeric_limits<int>::max();
+    // If there is a right subtree, there will be a left-most node with value >= this one.
+    assert(best_dist >= 0);
+    assert(best_node);
 
-  // An interior node needs to be replaced by a node that keeps the rest of the tree valid.
-  // In practice that means finding the next node that keeps the same split along the same axis.
-  // It may be valid to singly recurse here, but that would likely lead to less balanced trees.
-  int axis = node->depth % 2;
-  int coord = node->value.p.coords[axis];
-  find_closest_along_axis(&node->children[0], coord, axis, best_dist, best_node);
-  find_closest_along_axis(&node->children[1], coord, axis, best_dist, best_node);
+    node->value = (*best_node)->value;
+    remove_node(*best_node);
+    return;
+  }
 
-  assert(best_node);
-  node->value = (*best_node)->value;
-  remove_node(*best_node);
+  // Rebuild the subtree without this node.
+  int depth = node->depth;
+  sum_depth -= depth;
+  count -= 1;
+  std::vector<Value> values;
+  // Skip collecting this node as it's being removed.
+  collect_values(node->children[0], values);
+  assert(!node->children[1]);  // Otherwise we'd have replaced this node above.
+  node = build_balanced_tree(values.begin(), values.end(), depth);
 }
 
 KDTree::Value KDTree::pop_closest(Pointi p) {
@@ -176,100 +237,128 @@ KDTree::Value KDTree::pop_closest(Pointi p) {
   return out;
 }
 
-void KDTree::print_tree() const {
-  print_tree(root.get(), 0);
+void KDTree::print_tree(std::ostream& stream) const {
+  if (root) {
+    stream << root->value << std::endl;
+    print_tree(stream, root->children[0].get(), "", true);
+    print_tree(stream, root->children[1].get(), "", false);
+  }
 }
 
-void KDTree::print_tree(const Node* node, int depth) const {
+std::ostream& operator<<(std::ostream& stream, const KDTree& t) {
+  t.print_tree(stream);
+  return stream;
+}
+
+void KDTree::print_tree(std::ostream& stream, const Node* node, std::string prefix, bool first) const {
   if (!node) {
     return;
-  } 
-  for (int i = 0; i < depth; i++) {
-    std::cout << "  ";
   }
-  std::cout << node->value << std::endl;
-  print_tree(node->children[0].get(), depth + 1);
-  print_tree(node->children[1].get(), depth + 1);
+  stream << prefix << (first ? "├─" : "└─") << node->value << std::endl;
+  prefix += (first ? "│ " : "  ");
+  print_tree(stream, node->children[0].get(), prefix, true);
+  print_tree(stream, node->children[1].get(), prefix, false);
 }
 
 bool KDTree::validate() const {
-  return validate(root.get(), 0);
-}
-bool KDTree::validate(const Node* node, int depth) const {
-  if (!node) {
-    return true;
-  }
-  if (node->depth != depth) {
-    return false;
-  }
-
-  int axis = depth % 2;
-  if (node->children[0] && node->value.p.coords[axis] < node->children[0]->value.p.coords[axis]) {
-    return false;
-  }
-  if (node->children[1] && node->value.p.coords[axis] > node->children[1]->value.p.coords[axis]) {
-    return false;
-  }
-  if (!validate(node->children[0].get(), depth + 1)) {
-    return false;
-  }
-  if (!validate(node->children[1].get(), depth + 1)) {
-    return false;
-  }
+  int min = std::numeric_limits<int>::min();
+  int max = std::numeric_limits<int>::max();
+  validate(root.get(), 0, Pointi(min, min), Pointi(max, max));
   return true;
+}
+void KDTree::validate(const Node* node, int depth, Pointi min, Pointi max) const {
+  if (!node) {
+    return;
+  }
+   
+  // Assert instead of return false so that gdb will give a backtrace.
+  assert(node->depth == depth);
+  assert(node->value.p.x >= min.x);
+  assert(node->value.p.y >= min.y);
+  assert(node->value.p.x < max.x);
+  assert(node->value.p.y < max.y);
+
+  if (depth % 2 == 0) {
+    validate(
+        node->children[0].get(), depth + 1,
+        Pointi(min.x, min.y), Pointi(node->value.p.x, max.y));
+    validate(
+        node->children[1].get(), depth + 1,
+        Pointi(node->value.p.x, min.y), Pointi(max.x, max.y));
+  } else {
+    validate(
+        node->children[0].get(), depth + 1,
+        Pointi(min.x, min.y), Pointi(max.x, node->value.p.y));
+    validate(
+        node->children[1].get(), depth + 1,
+        Pointi(min.x, node->value.p.y), Pointi(max.x, max.y));
+  }
+}
+
+void KDTree::collect_values(std::unique_ptr<Node> &node, std::vector<Value> &values) {
+  if (!node) {
+    return;
+  }
+  values.push_back(node->value);
+  collect_values(node->children[0], values);
+  collect_values(node->children[1], values);
+  sum_depth -= node->depth;
+  count -= 1;
+  node.reset();
 }
 
 void KDTree::rebalance() {
-    if (!root) {
-      return;
-    }
+  if (!root) {
+    return;
+  }
 
-    std::cout << "before size: " << size()
-              << " max depth: " << depth_max()
-              << " avg depth: " << depth_avg()
-              << " std dev: " << depth_stddev()
-              << " balance: " << balance_factor() << std::endl;
+  // std::cout << "before " << balance_str() << std::endl;
 
-    std::vector<Value> values;
-    collect_values(root.get(), values);
-    root.reset();
+  std::vector<Value> values;
+  values.reserve(count);
+  collect_values(root, values);
 
-    sum_depth = 0;
-    root = build_balanced_tree(values, 0, 0, values.size() - 1);
+  assert(!root);
+  assert(sum_depth == 0);
+  assert(count == 0);
 
-    std::cout << "after  size: " << size()
-              << " max depth: " << depth_max()
-              << " avg depth: " << depth_avg()
-              << " std dev: " << depth_stddev()
-              << " balance: " << balance_factor() << std::endl;
-}
+  root = build_balanced_tree(values.begin(), values.end(), 0);
+  assert(values.size() == size());
 
-void KDTree::collect_values(Node *node, std::vector<Value> &values) {
-    if (!node) {
-      return;
-    }
-    values.push_back(node->value);
-    collect_values(node->children[0].get(), values);
-    collect_values(node->children[1].get(), values);
+  // std::cout << "after  " << balance_str() << std::endl;
 }
 
 std::unique_ptr<KDTree::Node> KDTree::build_balanced_tree(
-    std::vector<Value> &values, int depth, int start, int end) {
-  if (start > end) return nullptr;
+    std::vector<Value>::iterator start, std::vector<Value>::iterator end, int depth) {
+  if (start == end) {
+    return nullptr;
+  }
 
   int axis = depth % 2;
-  int mid = start + (end - start) / 2;
 
-  std::nth_element(
-      values.begin() + start, values.begin() + mid, values.begin() + end + 1,
-      [axis](const Value &a, const Value &b) { return (axis == 0 ? a.p.x < b.p.x : a.p.y < b.p.y); });
+  // Choose the pivot.
+  std::vector<Value>::iterator mid = std::next(start, std::distance(start, end) / 2);
+  // Find the pivot value
+  std::nth_element(start, mid, end, [axis](const Value &a, const Value &b) {
+      return a.p.coords[axis] < b.p.coords[axis]; });
+  Value pivot = *mid;
+  // Find the pivot's true location, as it has to be the first of that value.
+  mid = std::partition(start, mid, [axis, pivot](const Value& a) {
+      return a.p.coords[axis] < pivot.p.coords[axis]; });
 
-  auto node = std::make_unique<Node>(values[mid], depth);
+  auto node = std::make_unique<Node>(*mid, depth);
   sum_depth += depth;
-  node->children[0] = build_balanced_tree(values, depth + 1, start, mid - 1);
-  node->children[1] = build_balanced_tree(values, depth + 1, mid + 1, end);
+  count += 1;
+  node->children[0] = build_balanced_tree(start, mid, depth + 1);
+  node->children[1] = build_balanced_tree(mid + 1, end, depth + 1);
 
   return node;
+}
+
+std::string KDTree::balance_str() const {
+  return absl::StrFormat(
+      "size: %i, max depth: %i, avg depth: %.3f, std dev: %.3f, balance: %.3f",
+      size(), depth_max(), depth_avg(), depth_stddev(), balance_factor());
 }
 
 int KDTree::depth_max() const {
@@ -278,16 +367,12 @@ int KDTree::depth_max() const {
 int KDTree::depth_max(const Node* node) const {
   if (!node) {
     return 0;
-  } else if (node->children[0] && node->children[1]) {
-    return std::max(depth_max(node->children[0].get()),
-                    depth_max(node->children[1].get()));
-  } else if (node->children[0]) {
-    return depth_max(node->children[0].get());
-  } else if (node->children[1]) {
-    return depth_max(node->children[1].get());
-  } else {
-    return node->depth;
   }
+  return std::max({
+    node->depth,
+    depth_max(node->children[0].get()),
+    depth_max(node->children[1].get())
+  });
 }
 
 float KDTree::depth_avg() const {
@@ -327,7 +412,6 @@ int KDTree::leaf_count(const Node* node) const {
   }
 }
 
-
 double KDTree::depth_stddev() const {
   if (count > 0) {
     auto [_, variance] = depth_variance(root.get());
@@ -337,7 +421,6 @@ double KDTree::depth_stddev() const {
   }
 }
 
-// Calculate height variance for balance measurement
 std::pair<int, double> KDTree::depth_variance(Node *node) const {
   if (!node) return {0, 0.0};
 
@@ -349,26 +432,3 @@ std::pair<int, double> KDTree::depth_variance(Node *node) const {
   double variance = left_variance + right_variance + height_diff * height_diff;
   return {height, variance};
 }
-  
-
-// int main() {
-//   KDTree tree;
-
-//   tree.insert({1, {5, 6}});
-//   tree.insert({2, {3, 4}});
-//   tree.insert({3, {4, 7}});
-//   tree.insert({4, {8, 9}});
-//   tree.insert({5, {1, 2}});
-//   tree.insert({6, {10, 11}});
-//   tree.insert({7, {8, 9}});
-//   tree.print_tree();
-
-//   while (!tree.empty()) {
-//     KDTree::Value closest = tree.pop_closest(3, 4);
-//     assert(tree.validate());
-//     std::cout << "Popped closest: " << closest << "\n";
-//     tree.print_tree();
-//   }
-
-//   return 0;
-// }
