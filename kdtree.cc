@@ -144,7 +144,9 @@ KDTree::Value KDTree::find_closest(Pointi p) {
 void KDTree::find_closest(
     std::unique_ptr<Node> *node, Pointi p, int &best_dist,
     std::unique_ptr<Node> *&best_node) const {
-  if (!*node) return;
+  if (!*node) {
+    return;
+  }
 
   int dist = distance(p, (*node)->value.p);
   if (dist < best_dist) {
@@ -163,7 +165,9 @@ void KDTree::find_closest(
 void KDTree::find_leftmost_along_axis(
     std::unique_ptr<Node> *node, int coord, int axis, int &best_dist,
     std::unique_ptr<Node> *&best_node) const {
-  if (!*node) return;
+  if (!*node) {
+    return;
+  }
 
   int dist = (*node)->value.p.coords[axis] - coord;
   if (dist < best_dist ||
@@ -178,7 +182,8 @@ void KDTree::find_leftmost_along_axis(
   if (axis != (*node)->depth % 2) {
     // No need to search the right side if we're searching along the axis as they have
     // values greater or equal than this node. It's plausible there's a deeper node with
-    // equal value, but it's probably not worth the effort to search for.
+    // equal value, but it's probably not worth the effort to search for. We do need to
+    // search the right side for off-axis levels as we make no claim about them.
     find_leftmost_along_axis(&(*node)->children[1], coord, axis, best_dist, best_node);
   }
 }
@@ -186,20 +191,10 @@ void KDTree::find_leftmost_along_axis(
 void KDTree::remove_node(std::unique_ptr<Node> &node) {
   if (!node) {
     return;
-  }
-  if (!node->children[0] && !node->children[1]) {
-    // A leaf node can just be removed.
-    sum_depth -= node->depth;
-    count -= 1;
-    node.reset();
-    return;
-  }
-  // It is valid to replace this node with any of the leftmost nodes in the right subtree.
-  // It is NOT valid to replace this node with the rightmost node of the left subtree,
-  // as promoting that node would break the invariant for all nodes that have a value
-  // equal to it along that axis, so they'd need to move from the left subtree to the
-  // right subtree. Finding all of those would be a pain, so just rebuild instead.
-  if (node->children[1]) {
+  } else if (node->children[1]) {
+    // It is valid to replace this node with any of the leftmost nodes in the right subtree.
+    // There may be multiple leftmost nodes, but any will do as they will all sort to the
+    // right of any of the others.
     std::unique_ptr<Node> *best_node = nullptr;
     int best_dist = std::numeric_limits<int>::max();
     int axis = node->depth % 2;
@@ -213,17 +208,27 @@ void KDTree::remove_node(std::unique_ptr<Node> &node) {
     node->value = (*best_node)->value;
     remove_node(*best_node);
     return;
+  } else if (node->children[0]) {
+    // It is NOT valid to replace this node with the rightmost node of the left subtree,
+    // as promoting that node would break the invariant for all nodes that have a value
+    // equal to it along that axis, so they'd need to move from the left subtree to the
+    // right subtree. Finding/moving all of those would be a pain, so just rebuild instead.
+    int depth = node->depth;
+    sum_depth -= depth;
+    count -= 1;
+    std::vector<Value> values;
+    // Skip collecting this node as it's being removed.
+    collect_values(node->children[0], values);
+    assert(!node->children[1]);  // Otherwise we'd have replaced this node above.
+    node = build_balanced_tree(values.begin(), values.end(), depth);
+    return;
+  } else {
+    // A leaf node can just be removed.
+    sum_depth -= node->depth;
+    count -= 1;
+    node.reset();
+    return;
   }
-
-  // Rebuild the subtree without this node.
-  int depth = node->depth;
-  sum_depth -= depth;
-  count -= 1;
-  std::vector<Value> values;
-  // Skip collecting this node as it's being removed.
-  collect_values(node->children[0], values);
-  assert(!node->children[1]);  // Otherwise we'd have replaced this node above.
-  node = build_balanced_tree(values.begin(), values.end(), depth);
 }
 
 KDTree::Value KDTree::pop_closest(Pointi p) {
