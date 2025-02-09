@@ -45,12 +45,6 @@ AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
   assert(window_ratio > 0 && window_ratio <= 1);
 
   sf::VideoMode window_size = sf::VideoMode::getDesktopMode();
-  assert(dims.x <= window_size.width);
-  assert(dims.y <= window_size.height);
-  if (dims.x == window_size.width) {
-    window_ratio = 1;
-  }
-
   window_size.width *= window_ratio;
   window_size.height *= window_ratio;
 
@@ -60,6 +54,7 @@ AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
   // window.setVerticalSyncEnabled(true);
 
   view_.reset(sf::FloatRect(0, 0, dims.x, dims.y));
+  clamp_view();
   window_->setView(view_);
 
   rect_ = sf::RectangleShape(sf::Vector2f(dims.x, dims.y));
@@ -94,13 +89,21 @@ bool AgentSFML::draw(bool force) {
 
 void AgentSFML::clamp_view() {
   sf::Vector2f view_size = view_.getSize();
+  sf::Vector2u window_size = window_->getSize();
 
   // Don't zoom out farther than the field.
   view_size.x = std::min<float>(view_size.x, dims_.x);
   view_size.y = std::min<float>(view_size.y, dims_.y);
 
+  // Don't zoom out farther than the window, ie 1px per cell.
+  view_size.x = std::min<float>(view_size.x, window_size.x);
+  view_size.y = std::min<float>(view_size.y, window_size.y);
+
+  // Don't zoom in too close.
+  view_size.x = std::max<float>(view_size.x, 64);
+  view_size.y = std::max<float>(view_size.y, 64);
+
   // Make sure the view's aspect ratio matches the window.
-  sf::Vector2u window_size = window_->getSize();
   float view_ratio = float(view_size.x) / view_size.y;
   float window_ratio = float(window_size.x) / window_size.y;
   if (view_ratio > window_ratio) {
@@ -154,6 +157,19 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
         }
 
         case sf::Event::MouseWheelScrolled: {
+          if (dragging_) {
+            break;  // Zooming while dragging is really distracting and confusing.
+          }
+          sf::Vector2f view_size = view_.getSize();
+          sf::Vector2u window_size = window_->getSize();
+          if (event.mouseWheelScroll.delta < 0 && (view_size.x >= window_size.x ||
+                                                   view_size.y >= window_size.y)) {
+            break;  // Already at max zoom. Can't zoom out farther than 1px per cell.
+          }
+          if (event.mouseWheelScroll.delta > 0 && (view_size.x <= 64 || view_size.y <= 64)) {
+            break;  // Don't zoom too close.
+          }
+
           sf::Vector2i pixel_pos = sf::Mouse::getPosition(*window_);
           sf::Vector2f before_zoom = window_->mapPixelToCoords(pixel_pos, view_);
 
@@ -197,10 +213,13 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
 
         case sf::Event::MouseMoved: {
           if (dragging_) {
-            sf::Vector2f mouse_pos = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
+            sf::Vector2i pixel_pos = sf::Mouse::getPosition(*window_);
+            sf::Vector2f mouse_pos = window_->mapPixelToCoords(pixel_pos, view_);
             view_.move(prev_mouse_pos_ - mouse_pos);
             clamp_view();
-            prev_mouse_pos_ = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
+
+            // Recompute this after changing the view. Using mouse_pos leads to stuttering.
+            prev_mouse_pos_ = window_->mapPixelToCoords(pixel_pos, view_);
           }
           break;
         }
