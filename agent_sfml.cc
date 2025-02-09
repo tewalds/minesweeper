@@ -1,6 +1,7 @@
 
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <iostream>
 
 #include "agent_sfml.h"
@@ -173,7 +174,8 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
           sf::Vector2i pixel_pos = sf::Mouse::getPosition(*window_);
           sf::Vector2f before_zoom = window_->mapPixelToCoords(pixel_pos, view_);
 
-          view_.zoom(event.mouseWheelScroll.delta > 0 ? 0.5 : 2.0);
+          const float sqrt2 = std::sqrt(2.0);
+          view_.zoom(event.mouseWheelScroll.delta > 0 ? 1./sqrt2 : sqrt2);
 
           sf::Vector2f after_zoom = window_->mapPixelToCoords(pixel_pos, view_);
           view_.move(before_zoom - after_zoom);  // Zoom centered on the mouse.
