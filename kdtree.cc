@@ -30,6 +30,7 @@ int KDTree::size() const {
 void KDTree::clear() {
   root.reset();
   count = 0;
+  sum_depth = 0;
 }
 
 KDTree::Iterator KDTree::begin() const {
