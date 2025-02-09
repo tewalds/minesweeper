@@ -1,6 +1,7 @@
 
 #include <array>
 #include <cassert>
+#include <iostream>
 
 #include "agent_sfml.h"
 
@@ -25,8 +26,22 @@ auto COLORS = std::array<sf::Color, 12>{
 };
 
 
+std::ostream& operator<< (std::ostream& stream, const sf::Vector2f& v) {
+  return stream << "V2f(" << "x: " << v.x << ", y: " << v.y << ")";
+}
+
+std::ostream& operator<< (std::ostream& stream, const sf::FloatRect& v) {
+  return stream << "Rect("
+    << "left: " << v.left
+    << ", top: " << v.top
+    << ", width: " << v.width
+    << ", height: " << v.height
+    << ")";
+}
+
+
 AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
-    : dims_(dims), user_(user), state_(dims) {
+    : dims_(dims), user_(user), state_(dims), dragging_(false) {
   assert(window_ratio > 0 && window_ratio <= 1);
 
   sf::VideoMode window_size = sf::VideoMode::getDesktopMode();
@@ -38,22 +53,25 @@ AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
 
   window_size.width *= window_ratio;
   window_size.height *= window_ratio;
-  px_size_ = window_size.width / dims.x;
-  window_size.width = dims.x * px_size_;
-  window_size.height = dims.y * px_size_;
 
   window_ = std::make_unique<sf::RenderWindow>(
     window_size, "Minesweeper",
     (window_ratio >= 1 ? sf::Style::Fullscreen : sf::Style::Default));
   // window.setVerticalSyncEnabled(true);
 
-  rect_ = sf::RectangleShape(sf::Vector2f(window_size.width, window_size.height));
+  view_.reset(sf::FloatRect(0, 0, dims.x, dims.y));
+  window_->setView(view_);
+
+  rect_ = sf::RectangleShape(sf::Vector2f(dims.x, dims.y));
 
   last_render_time_ = std::chrono::steady_clock::now();
   reset();
 }
 
 void AgentSFML::reset() {
+  while (!actions_.empty()) {
+    actions_.pop();
+  }
   image_.create(dims_.x, dims_.y, COLORS[HIDDEN]);
   draw(true);
 }
@@ -64,12 +82,41 @@ bool AgentSFML::draw(bool force) {
   if (force || now - last_render_time_ > frame_time) {
     assert(texture_.loadFromImage(image_));
     rect_.setTexture(&texture_, true);
+    // window_->clear();
+    window_->setView(view_);
     window_->draw(rect_);
     window_->display();
     last_render_time_ = now;
     return true;
   }
   return false;
+}
+
+void AgentSFML::clamp_view() {
+  sf::Vector2f view_size = view_.getSize();
+
+  // Don't zoom out farther than the field.
+  view_size.x = std::min<float>(view_size.x, dims_.x);
+  view_size.y = std::min<float>(view_size.y, dims_.y);
+
+  // Make sure the view's aspect ratio matches the window.
+  sf::Vector2u window_size = window_->getSize();
+  float view_ratio = float(view_size.x) / view_size.y;
+  float window_ratio = float(window_size.x) / window_size.y;
+  if (view_ratio > window_ratio) {
+    view_size.x = view_size.y * window_ratio;
+  } else if (view_ratio < window_ratio) {
+    view_size.y = view_size.x / window_ratio;
+  }
+
+  view_.setSize(view_size);
+
+  // Don't scroll off the field.
+  sf::Vector2f half_size = view_size * 0.5f;
+  sf::Vector2f center = view_.getCenter();
+  center.x = std::clamp(center.x, half_size.x, dims_.x - half_size.x);
+  center.y = std::clamp(center.y, half_size.y, dims_.y - half_size.y);
+  view_.setCenter(center);
 }
 
 Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
@@ -79,7 +126,7 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
   }
   if (draw(false)) {
     sf::Event event;
-    if (window_->pollEvent(event)) {
+    while (window_->pollEvent(event)) {
       switch (event.type) {
         case sf::Event::Closed:
           return {QUIT, {0, 0}, user_};
@@ -101,13 +148,59 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
           }
           break;
 
+        case sf::Event::Resized: {
+          clamp_view();
+          break;
+        }
+
+        case sf::Event::MouseWheelScrolled: {
+          sf::Vector2i pixel_pos = sf::Mouse::getPosition(*window_);
+          sf::Vector2f before_zoom = window_->mapPixelToCoords(pixel_pos, view_);
+
+          view_.zoom(event.mouseWheelScroll.delta > 0 ? 0.5 : 2.0);
+
+          sf::Vector2f after_zoom = window_->mapPixelToCoords(pixel_pos, view_);
+          view_.move(before_zoom - after_zoom);  // Zoom centered on the mouse.
+
+          clamp_view();
+          break;
+        }
+
         case sf::Event::MouseButtonPressed: {
-          int x = event.mouseButton.x / px_size_;
-          int y = event.mouseButton.y / px_size_;
-          if (event.mouseButton.button == sf::Mouse::Button::Left) {
-            return {OPEN, {x, y}, user_};
-          } else if (event.mouseButton.button == sf::Mouse::Button::Right) {
-            return {MARK, {x, y}, user_};
+          sf::Vector2f mouse_pos = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
+          if (event.mouseButton.button == sf::Mouse::Button::Middle) {
+            dragging_ = true;
+            prev_mouse_pos_ = mouse_pos;
+          } else {
+            mouse_pos_down_ = Pointi(int(mouse_pos.x), int(mouse_pos.y));
+          }
+          break;
+        }
+
+        case sf::Event::MouseButtonReleased: {
+          if (event.mouseButton.button == sf::Mouse::Button::Middle) {
+            dragging_ = false;
+          } else {
+            sf::Vector2f mouse_pos_up = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
+            Pointi mouse_pos(int(mouse_pos_up.x), int(mouse_pos_up.y));
+
+            if (mouse_pos == mouse_pos_down_) {  // Avoid misclicks if the mouse moves slightly.
+              if (event.mouseButton.button == sf::Mouse::Button::Left) {
+                actions_.push({OPEN, mouse_pos, user_});
+              } else if (event.mouseButton.button == sf::Mouse::Button::Right) {
+                actions_.push({MARK, mouse_pos, user_});
+              }
+            }
+          }
+          break;
+        }
+
+        case sf::Event::MouseMoved: {
+          if (dragging_) {
+            sf::Vector2f mouse_pos = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
+            view_.move(prev_mouse_pos_ - mouse_pos);
+            clamp_view();
+            prev_mouse_pos_ = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
           }
           break;
         }
@@ -118,5 +211,10 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
     }
   }
 
+  if (!actions_.empty()) {
+    Action a = actions_.front();
+    actions_.pop();
+    return a;
+  }
   return Action{PASS, {0, 0}, user_};
 }
