@@ -222,6 +222,15 @@
                 "x": 0,
                 "y": 0
             }
+        },
+        "player_Rachel": {
+            "username": "Rachel",
+            "avatar": "🍀",
+            "color": "#1919FF",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
         }
     }
 }

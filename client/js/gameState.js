@@ -40,6 +40,23 @@ const GameState = {
         y: null
     },
 
+    // Add connection management
+    connection: null,
+
+    setConnection: function (connectionInstance) {
+        if (this.connection) {
+            this.connection.disconnect();
+        }
+        this.connection = connectionInstance;
+    },
+
+    disconnect: function () {
+        if (this.connection) {
+            this.connection.disconnect();
+            this.connection = null;
+        }
+    },
+
     init: async function () {
         // Load saved user data
         this.currentUser.username = GameStorage.load(GameStorage.USERNAME_KEY);

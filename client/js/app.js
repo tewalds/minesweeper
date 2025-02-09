@@ -1,5 +1,6 @@
 const App = {
     screens: {
+        CONNECTION: 'connection',
         FILE_SELECT: 'file_select',
         LOGIN: 'login',
         CUSTOMIZE: 'customize',
@@ -12,27 +13,8 @@ const App = {
     init: async function () {
         this.addSettingsMenu();
 
-        // Start with file selection if we don't have a file handle
-        if (!MockDB.fileHandle || !MinesweeperDB.fileHandle) {
-            this.showScreen(this.screens.FILE_SELECT);
-            return;
-        }
-
-        // Otherwise proceed with normal initialization
-        await MockDB.init();
-        await MinesweeperDB.init();
-        await GameState.init();
-
-        // Determine initial screen
-        if (!GameState.currentUser.username) {
-            this.showScreen(this.screens.LOGIN);
-        } else if (!GameState.currentUser.avatar || !GameState.currentUser.color) {
-            this.showScreen(this.screens.CUSTOMIZE);
-        } else if (GameState.currentUser.x === null || GameState.currentUser.y === null) {
-            this.showScreen(this.screens.SPAWN);
-        } else {
-            this.showScreen(this.screens.PLAY);
-        }
+        // Always start with connection choice
+        this.showScreen(this.screens.CONNECTION);
     },
 
     showScreen: async function (screenName) {
@@ -43,6 +25,9 @@ const App = {
         screenContent.innerHTML = ''; // Only clear screen content
 
         switch (screenName) {
+            case this.screens.CONNECTION:
+                await ConnectionScreen.show(screenContent);
+                break;
             case this.screens.FILE_SELECT:
                 await FileSelectScreen.show(screenContent);
                 break;
@@ -81,6 +66,7 @@ const App = {
 
             // Handle logout
             if (e.target.closest('.logout-button')) {
+                GameState.disconnect();
                 GameState.currentUser = {
                     username: null,
                     avatar: null,
@@ -88,7 +74,7 @@ const App = {
                     x: null,
                     y: null
                 };
-                this.showScreen(this.screens.LOGIN);
+                this.showScreen(this.screens.CONNECTION);
             }
         });
     }

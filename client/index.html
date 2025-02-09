@@ -1,9 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <title>Multiplayer Minesweeper</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper</title>
     <link rel="stylesheet" href="css/styles.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 
 <body>
@@ -11,14 +15,19 @@
         <!-- Screens will be dynamically inserted here -->
     </div>
 
-    <!-- Core game logic -->
+    <!-- Config -->
+    <script src="js/config.js"></script>
+
+    <!-- Core -->
+    <script src="js/gameConnection.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/mockDB.js"></script>
     <script src="js/minesweeperDB.js"></script>
     <script src="js/gameState.js"></script>
     <script src="js/minesweeperAI.js"></script>
 
-    <!-- Screen handlers -->
+    <!-- Screens -->
+    <script src="js/screens/connectionScreen.js"></script>
     <script src="js/screens/fileSelectScreen.js"></script>
     <script src="js/screens/loginScreen.js"></script>
     <script src="js/screens/customizeScreen.js"></script>
