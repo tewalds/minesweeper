@@ -29,10 +29,18 @@ ABSL_FLAG(int, port, 9001, "Port to run the websocket server on.");
 ABSL_FLAG(int, agents, 1, "Agents");
 ABSL_FLAG(bool, benchmark, false, "Exit after the first run");
 
+namespace {
+    volatile std::sig_atomic_t signal_status;
+}
+
+void signal_handler(int signal) {
+  signal_status = signal;
+}
 
 int main(int argc, char **argv) {
   absl::SetProgramUsageMessage("Minesweeper: including an agent, UI and websocket server.\n");
   absl::ParseCommandLine(argc, argv);
+  std::signal(SIGINT, signal_handler);
 
   bool benchmark = absl::GetFlag(FLAGS_benchmark);
 
@@ -69,7 +77,7 @@ int main(int argc, char **argv) {
   bool paused = false;
   bool finished = false;
   bool quit = false;
-  while (!quit && !(finished && benchmark)) {
+  while (!quit && !signal_status && !(finished && benchmark)) {
     auto start = std::chrono::steady_clock::now();
 
     finished = false;
