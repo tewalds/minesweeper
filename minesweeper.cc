@@ -8,6 +8,7 @@
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 
@@ -30,6 +31,7 @@ ABSL_FLAG(bool, benchmark, false, "Exit after the first run");
 
 
 int main(int argc, char **argv) {
+  absl::SetProgramUsageMessage("Minesweeper: including an agent, UI and websocket server.\n");
   absl::ParseCommandLine(argc, argv);
 
   bool benchmark = absl::GetFlag(FLAGS_benchmark);
