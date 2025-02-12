@@ -80,8 +80,8 @@ void AgentWebSocket::send_update(websocketpp::connection_hdl hdl, Update u) {
 int AgentWebSocket::send_rect(websocketpp::connection_hdl hdl, Recti r) {
   // TODO: Send in a more compact format. Maybe different formats for dense vs sparse area.
   int sent = 0;
-  for (int x = std::max(0, r.tl.x); x <= std::min(r.br.x, state_.width() - 1); x++) {
-    for (int y = std::max(0, r.tl.y); y <= std::min(r.br.y, state_.height() - 1); y++) {
+  for (int x = r.left(); x < r.right(); x++) {
+    for (int y = r.top(); y < r.right(); y++) {
       Cell c = state_(x, y);
       if (c.state != HIDDEN) {
         send_update(hdl, {c.state, {x, y}, c.user});
@@ -116,32 +116,35 @@ void AgentWebSocket::on_message(
     client_map_[hdl].name = name;
     std::cout << absl::StrFormat("New user id: %i, name: %s\n", client_map_[hdl].userid, name);
     broadcast(absl::StrFormat("join %d %s", client_map_[hdl].userid, name));
-
-    // Dump the state.
-    // send_rect(hdl, Recti({0, 0}, state_.dims()));
   } else if (command == "open") {
     int x, y;
     iss >> x >> y;
-    int user = client_map_[hdl].userid;
-    std::lock_guard<std::mutex> guard(actions_mutex_);
-    actions_.push({OPEN, {x, y}, user});
+    Pointi p(x, y);
+    if (state_.rect().contains(p)) {
+      int user = client_map_[hdl].userid;
+      std::lock_guard<std::mutex> guard(actions_mutex_);
+      actions_.push({OPEN, p, user});
+    }
   } else if (command == "mark") {
     int x, y;
     iss >> x >> y;
-    int user = client_map_[hdl].userid;
-    std::lock_guard<std::mutex> guard(actions_mutex_);
-    actions_.push({MARK, {x, y}, user});
+    Pointi p(x, y);
+    if (state_.rect().contains(p)) {
+      int user = client_map_[hdl].userid;
+      std::lock_guard<std::mutex> guard(actions_mutex_);
+      actions_.push({MARK, p, user});
+    }
   } else if (command == "view") {
     int x1, y1, x2, y2;
     iss >> x1 >> y1 >> x2 >> y2;
-    Recti new_view({x1, y1}, {x2, y2});
-    // std::cout << "New view: " << new_view << ", old view: " << client_map_[hdl].view <<  std::endl;
-    for (Recti r : new_view.difference(client_map_[hdl].view)) {
-      send_rect(hdl, r);
-      // int sent = send_rect(hdl, r);
-      // std::cout << "Send rect: " << r << ", sent: " << sent << std::endl;
+    std::optional<Recti> new_view = state_.rect().intersection({{x1, y1}, {x2, y2}});
+    // TODO: Check that the view isn't too big? How big is too big?
+    if (new_view) {
+      for (Recti r : new_view->difference(client_map_[hdl].view)) {
+        send_rect(hdl, r);
+      }
+      client_map_[hdl].view = *new_view;
     }
-    client_map_[hdl].view = new_view;
   } else {
     std::cout << "Unknown command: " << command << std::endl;
   }

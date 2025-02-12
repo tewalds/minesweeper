@@ -30,6 +30,10 @@ TEST_CASE("Recti", "[point]") {
     REQUIRE(r.contains({7, 9}) == true);
     REQUIRE(r.contains({1, 1}) == false);
     REQUIRE(r.contains({6, 1}) == false);
+    REQUIRE(r.contains({5, 6}) == true);
+    REQUIRE(r.contains({5, 15}) == false);
+    REQUIRE(r.contains({10, 6}) == false);
+    REQUIRE(r.contains({10, 15}) == false);
 
     REQUIRE(r.contains(Recti({6, 7}, {8, 9})) == true);
     REQUIRE(r.contains(Recti({5, 6}, {10, 15})) == true);
@@ -42,6 +46,13 @@ TEST_CASE("Recti", "[point]") {
     REQUIRE(r.intersects(Recti({7, 8}, {9, 10})) == true);
     REQUIRE(r.intersects(Recti({4, 5}, {9, 10})) == true);
     REQUIRE(r.intersects(Recti({4, 5}, {11, 16})) == true);
+
+    // The boundaries match, but don't actually intersect.
+    REQUIRE(r.intersects(Recti({10, 6}, {12, 15})) == false);  // r left of inline
+    REQUIRE(r.intersects(Recti({2, 5}, {5, 16})) == false);  // r right of inline
+    REQUIRE(r.intersects(Recti({7, 15}, {8, 20})) == false);  // r above inline
+    REQUIRE(r.intersects(Recti({2, 3}, {8, 6})) == false);  // r below inline
+    REQUIRE(r.intersects(Recti({10, 15}, {18, 19})) == false);  // r touches corner of inline
   }
 
   SECTION("union") {
@@ -56,6 +67,13 @@ TEST_CASE("Recti", "[point]") {
     REQUIRE(r.intersection(Recti({7, 8}, {9, 10})) == Recti({7, 8}, {9, 10}));  // internal
     REQUIRE(r.intersection(Recti({4, 5}, {9, 10})) == Recti({5, 6}, {9, 10}));  // top edge
     REQUIRE(r.intersection(Recti({7, 8}, {11, 16})) == Recti({7, 8}, {10, 15}));  // br corner
+
+    // The boundaries match, but don't actually intersect.
+    REQUIRE(r.intersection(Recti({10, 6}, {12, 15})) == std::nullopt);  // r left of inline
+    REQUIRE(r.intersection(Recti({2, 5}, {5, 16})) == std::nullopt);  // r right of inline
+    REQUIRE(r.intersection(Recti({7, 15}, {8, 20})) == std::nullopt);  // r above inline
+    REQUIRE(r.intersection(Recti({2, 3}, {8, 6})) == std::nullopt);  // r below inline
+    REQUIRE(r.intersection(Recti({10, 15}, {18, 19})) == std::nullopt);  // r touches corner of inline
   }
 
   SECTION("difference") {

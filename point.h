@@ -69,18 +69,20 @@ struct Recti {
   Pointf centerf() const { return Pointf((left() + right()) / 2.0f, (top() + bottom()) / 2.0f); }
   Pointi size() const { return Pointi(width(), height()); }
 
+  // Includes the top-left point, does not contain the bottom or right points.
   bool contains(const Pointi& p) const {
-    return left() <= p.x && p.x <= right() && top() <= p.y && p.y <= bottom();
+    return left() <= p.x && p.x < right() && top() <= p.y && p.y < bottom();
   }
 
   bool contains(const Recti& o) const {
-    return (left() <= o.left() && right() >= o.right() && 
+    return (left() <= o.left() && right() >= o.right() &&
             top() <= o.top() && bottom() >= o.bottom());
   }
 
   bool intersects(const Recti& o) const {
-    return !(left() > o.right() || right() < o.left() || 
-             top() > o.bottom() || bottom() < o.top());
+    // Bottom and right are exclusive, so we need to check for equality too.
+    return !(left() >= o.right() || right() <= o.left() ||
+             top() >= o.bottom() || bottom() <= o.top());
   }
 
   std::optional<Recti> intersection(const Recti& o) const {

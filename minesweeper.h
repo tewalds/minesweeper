@@ -60,6 +60,7 @@ class Array2D {
   int width() const { return dims_.x; }
   int height() const { return dims_.y; }
   Pointi dims() const { return dims_; }
+  Recti rect() const { return Recti({0, 0}, dims_); }
   int size() const { return dims_.x * dims_.y; }
 
  private:

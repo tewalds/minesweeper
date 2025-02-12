@@ -144,13 +144,15 @@ int main(int argc, char **argv) {
   while (!done) {
     if (agent) {
       Action a;
-      Recti cur_view;
       {
         std::lock_guard<std::mutex> guard(mutex);
         a = agent->step(updates, false);
         updates.clear();
-        cur_view = agent->get_view().recti();
       }
+      Rectf cur_viewf = agent->get_view();
+      // Add a small buffer so you can scroll a bit or zoom out once without latency.
+      cur_viewf = Rectf::from_center_size(cur_viewf.center(), cur_viewf.size() * 1.5);
+      Recti cur_view = cur_viewf.recti();
       send_action(client, con->get_handle(), a);
       if (view != cur_view) {
         send_view(client, con->get_handle(), cur_view);
