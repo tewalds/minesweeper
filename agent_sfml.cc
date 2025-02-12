@@ -27,6 +27,8 @@ auto COLORS = std::array<sf::Color, 12>{
 };
 
 
+const int MAX_CELL_SIZE = 128;  // In pixels.
+
 std::ostream& operator<< (std::ostream& stream, const sf::Vector2f& v) {
   return stream << "V2f(" << "x: " << v.x << ", y: " << v.y << ")";
 }
@@ -107,8 +109,8 @@ void AgentSFML::clamp_view() {
   view_size.y = std::min<float>(view_size.y, window_size.y);
 
   // Don't zoom in too close.
-  view_size.x = std::max<float>(view_size.x, 64);
-  view_size.y = std::max<float>(view_size.y, 64);
+  view_size.x = std::max<float>(view_size.x, window_size.x / MAX_CELL_SIZE);
+  view_size.y = std::max<float>(view_size.y, window_size.y / MAX_CELL_SIZE);
 
   // Make sure the view's aspect ratio matches the window.
   float view_ratio = float(view_size.x) / view_size.y;
@@ -173,7 +175,8 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
                                                    view_size.y >= window_size.y)) {
             break;  // Already at max zoom. Can't zoom out farther than 1px per cell.
           }
-          if (event.mouseWheelScroll.delta > 0 && (view_size.x <= 64 || view_size.y <= 64)) {
+          if (event.mouseWheelScroll.delta > 0 && (view_size.x <= window_size.x / MAX_CELL_SIZE ||
+                                                   view_size.y <= window_size.y / MAX_CELL_SIZE)) {
             break;  // Don't zoom too close.
           }
 
