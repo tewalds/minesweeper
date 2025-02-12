@@ -29,11 +29,15 @@ class AgentWebSocket : public Agent {
   void on_close(websocketpp::connection_hdl hdl);
 
   void send(websocketpp::connection_hdl hdl, const std::string& str);
+  void broadcast_update(Update u);
+  void send_update(websocketpp::connection_hdl hdl, Update u);
+  int send_rect(websocketpp::connection_hdl hdl, Recti r);
   void broadcast(const std::string& str);
 
   struct ClientInfo {
       std::string name;
       int userid;
+      Recti view;
   };
 
   std::thread thread_;

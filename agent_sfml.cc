@@ -63,6 +63,12 @@ AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
   last_render_time_ = std::chrono::steady_clock::now();
   reset();
 }
+ 
+Rectf AgentSFML::get_view() const {
+  sf::Vector2f center = view_.getCenter();
+  sf::Vector2f size = view_.getSize();
+  return Rectf::from_center_size({center.x, center.y}, {size.x, size.y});
+}
 
 void AgentSFML::reset() {
   while (!actions_.empty()) {

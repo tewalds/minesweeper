@@ -30,6 +30,7 @@ int userid = 0;
 std::unique_ptr<AgentSFML> agent;
 std::vector<Update> updates;
 bool done = false;
+Recti view;
 
 
 bool send(websocketpp::client<websocketpp::config::asio_client>& client, 
@@ -58,6 +59,14 @@ void send_action(
   } else {
     std::cout << "Dropping action: " << a.action << std::endl;
   }
+}
+
+void send_view(
+    websocketpp::client<websocketpp::config::asio_client>& client,
+    websocketpp::connection_hdl hdl,
+    Recti view) {
+  send(client, hdl, absl::StrFormat(
+      "view %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y));
 }
 
 void on_message(
@@ -135,12 +144,18 @@ int main(int argc, char **argv) {
   while (!done) {
     if (agent) {
       Action a;
+      Recti cur_view;
       {
         std::lock_guard<std::mutex> guard(mutex);
         a = agent->step(updates, false);
         updates.clear();
+        cur_view = agent->get_view().recti();
       }
       send_action(client, con->get_handle(), a);
+      if (view != cur_view) {
+        send_view(client, con->get_handle(), cur_view);
+        view = cur_view;
+      }
     } else if (userid > 0) {
       assert(dims.x > 0 && dims.y > 0);
       std::lock_guard<std::mutex> guard(mutex);

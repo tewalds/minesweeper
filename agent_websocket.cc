@@ -43,7 +43,7 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   // Broadcast updates.
   for (Update u: updates) {
     state_[u.point] = {u.state, u.user};
-    broadcast(absl::StrFormat("update %d %d %d %d", u.state, u.point.x, u.point.y, u.user));
+    broadcast_update(u);
   }
 
   std::lock_guard<std::mutex> guard(actions_mutex_);
@@ -65,11 +65,38 @@ void AgentWebSocket::broadcast(const std::string& str) {
   }
 }
 
+void AgentWebSocket::broadcast_update(Update u) {
+  for (auto& client_it : client_map_) {
+    if (client_it.second.view.contains(u.point)) {
+      send_update(client_it.first, u);
+    }
+  }
+}
+
+void AgentWebSocket::send_update(websocketpp::connection_hdl hdl, Update u) {
+  send(hdl, absl::StrFormat("update %d %d %d %d", u.state, u.point.x, u.point.y, u.user));
+}
+
+int AgentWebSocket::send_rect(websocketpp::connection_hdl hdl, Recti r) {
+  // TODO: Send in a more compact format. Maybe different formats for dense vs sparse area.
+  int sent = 0;
+  for (int x = std::max(0, r.tl.x); x <= std::min(r.br.x, state_.width() - 1); x++) {
+    for (int y = std::max(0, r.tl.y); y <= std::min(r.br.y, state_.height() - 1); y++) {
+      Cell c = state_(x, y);
+      if (c.state != HIDDEN) {
+        send_update(hdl, {c.state, {x, y}, c.user});
+        sent++;
+      }
+    }
+  }
+  return sent;
+}
+
 void AgentWebSocket::on_open(
     websocketpp::connection_hdl hdl) {
   std::cout << "Connection opened" << std::endl;
   int userid = next_userid_++;
-  client_map_[hdl] = {"", userid};
+  client_map_[hdl] = {"", userid, Recti()};
   send(hdl, absl::StrFormat("grid %i %i %i", state_.width(), state_.height(), userid));
 }
 
@@ -90,15 +117,8 @@ void AgentWebSocket::on_message(
     std::cout << absl::StrFormat("New user id: %i, name: %s\n", client_map_[hdl].userid, name);
     broadcast(absl::StrFormat("join %d %s", client_map_[hdl].userid, name));
 
-    // Dump the state. TODO: Send in a more compact format.
-    for (int x = 0; x < state_.width(); x++) {
-      for (int y = 0; y < state_.height(); y++) {
-        Cell c = state_(x, y);
-        if (c.state != HIDDEN) {
-          send(hdl, absl::StrFormat("update %d %d %d %d", c.state, x, y, c.user));
-        }
-      }
-    }
+    // Dump the state.
+    // send_rect(hdl, Recti({0, 0}, state_.dims()));
   } else if (command == "open") {
     int x, y;
     iss >> x >> y;
@@ -111,6 +131,19 @@ void AgentWebSocket::on_message(
     int user = client_map_[hdl].userid;
     std::lock_guard<std::mutex> guard(actions_mutex_);
     actions_.push({MARK, {x, y}, user});
+  } else if (command == "view") {
+    int x1, y1, x2, y2;
+    iss >> x1 >> y1 >> x2 >> y2;
+    Recti new_view({x1, y1}, {x2, y2});
+    // std::cout << "New view: " << new_view << ", old view: " << client_map_[hdl].view <<  std::endl;
+    for (Recti r : new_view.difference(client_map_[hdl].view)) {
+      send_rect(hdl, r);
+      // int sent = send_rect(hdl, r);
+      // std::cout << "Send rect: " << r << ", sent: " << sent << std::endl;
+    }
+    client_map_[hdl].view = new_view;
+  } else {
+    std::cout << "Unknown command: " << command << std::endl;
   }
 }
 

@@ -41,7 +41,8 @@ test: \
 		catch_amalgamated.o \
 		kdtree.o \
 		kdtree_test.o \
-		point.o
+		point.o \
+		point_test.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LOADLIBES) $(LDLIBS)
 
 run: all
@@ -81,3 +82,4 @@ minesweeper.o: minesweeper.cc agent.h minesweeper.h point.h agent_last.h \
 minesweeper-client.o: minesweeper-client.cc agent_sfml.h agent.h \
  minesweeper.h point.h
 point.o: point.cc point.h
+point_test.o: point_test.cc catch_amalgamated.h point.h

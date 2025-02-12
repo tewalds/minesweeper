@@ -22,6 +22,8 @@ class AgentSFML : public Agent {
   void reset();
   Action step(const std::vector<Update>& updates, bool paused);
 
+  Rectf get_view() const;
+
  private:
   bool draw(bool force);
   void clamp_view();
