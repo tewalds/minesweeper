@@ -106,3 +106,4 @@ minesweeper
 minesweeper-client
 test
 .vscode
+.Makefile
