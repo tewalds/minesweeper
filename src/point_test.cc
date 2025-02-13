@@ -2,7 +2,7 @@
 #include <optional>
 #include <vector>
 
-#include "catch_amalgamated.h"
+#include "catch2/catch_amalgamated.h"
 #include "point.h"
 
 TEST_CASE("Recti", "[point]") {

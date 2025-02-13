@@ -4,7 +4,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/random/random.h"
 
-#include "catch_amalgamated.h"
+#include "catch2/catch_amalgamated.h"
 #include "kdtree.h"
 #include "point.h"
 
