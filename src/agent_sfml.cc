@@ -64,6 +64,7 @@ AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
 
   last_render_time_ = std::chrono::steady_clock::now();
   reset();
+  draw(true);
 }
  
 Rectf AgentSFML::get_view() const {
@@ -77,7 +78,8 @@ void AgentSFML::reset() {
     actions_.pop();
   }
   image_.create(dims_.x, dims_.y, COLORS[HIDDEN]);
-  draw(true);
+  // Don't draw as reset may be called from a different thread than step, and sfml/opengl doesn't
+  // like drawing from different threads without syncing.
 }
 
 bool AgentSFML::draw(bool force) {
