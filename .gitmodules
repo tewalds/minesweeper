@@ -1,0 +1,3 @@
+[submodule "beauty"]
+	path = beauty
+	url = https://github.com/dfleury2/beauty.git
