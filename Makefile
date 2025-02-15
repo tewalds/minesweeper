@@ -3,12 +3,12 @@
 # https://www.gnu.org/software/make/manual/html_node/Implicit-Variables.html
 # CXX = g++
 CXX = clang++
-CPPFLAGS = -Wall -std=c++23 -pthread -g -O3 -I. -Ibeauty/include
-CPPFLAGS += -fvisibility=hidden -Bsymbolic  # https://www.youtube.com/watch?v=_enXuIxuNV4
+CXXFLAGS = -Wall -std=c++23 -pthread -g -O3 -I. -Ibeauty/include
+CXXFLAGS += -fvisibility=hidden -Bsymbolic  # https://www.youtube.com/watch?v=_enXuIxuNV4
 # LDFLAGS =
 
 # For profiling:
-# CPPFLAGS += -pg
+# CXXFLAGS += -pg
 # LDFLAGS += -pg -g
 
 LDLIBS = -lsfml-graphics -lsfml-window -lsfml-system
@@ -48,10 +48,10 @@ test: \
 		src/point.o \
 		src/point_test.o \
 		src/thread_test.o
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LOADLIBES) $(LDLIBS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 beauty/libeauty.a:
-	make -j$(NPROCS) -C beauty libeauty.a
+	$(MAKE) -C beauty libeauty.a
 
 run: all
 	./minesweeper
@@ -66,7 +66,7 @@ clean:
 		minesweeper \
 		minesweeper-client \
 		test
-	make -C beauty clean
+	$(MAKE) -C beauty clean
 
 fresh: clean all
 
@@ -77,6 +77,6 @@ installdeps:
 gendeps: .Makefile
 
 .Makefile: # contains the actual dependencies for all the .o files above
-	CXX="${CXX}" CPPFLAGS="${CPPFLAGS}" ./gendeps.sh catch2 src > .Makefile
+	CXX="${CXX}" CXXFLAGS="${CXXFLAGS}" ./gendeps.sh catch2 src > .Makefile
 
 include .Makefile
