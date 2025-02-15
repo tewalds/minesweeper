@@ -4,7 +4,6 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <websocketpp/client.hpp>
@@ -17,6 +16,7 @@
 #include "agent_sfml.h"
 #include "minesweeper.h"
 #include "point.h"
+#include "thread.h"
 
 ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(std::string, host, "localhost", "Websocket host.");
@@ -24,13 +24,15 @@ ABSL_FLAG(int, port, 9001, "Websocket port.");
 ABSL_FLAG(std::string, name, "wsclient", "Username");
 
 
-std::mutex mutex;
-Pointi dims(0, 0);
-int userid = 0;
-std::unique_ptr<AgentSFML> agent;
-std::vector<Update> updates;
+struct State {
+  std::unique_ptr<AgentSFML> agent;
+  std::vector<Update> updates;
+  Pointi dims;
+  int userid = 0;
+};
+
+MutexProtected<State> state;
 bool done = false;
-Recti view;
 
 
 bool send(websocketpp::client<websocketpp::config::asio_client>& client, 
@@ -85,28 +87,25 @@ void on_message(
     iss >> x >> y >> u;
     std::cout << absl::StrFormat("grid: %ix%i, userid: %i\n", x, y, u);
     {
-      std::lock_guard<std::mutex> guard(mutex);
-      dims = Pointi(x, y);
-      userid = u;
+      auto s = state.lock();
+      s->dims = Pointi(x, y);
+      s->userid = u;
     }
     send(client, hdl, absl::StrFormat("register %s", absl::GetFlag(FLAGS_name)));
   } else if (command == "update") {
-    int state, x, y, user;
-    iss >> state >> x >> y >> user;
-    Update update(CellState(state), {x, y}, user);
-    {
-      std::lock_guard<std::mutex> guard(mutex);
-      updates.push_back(update);
-    }
+    int c, x, y, user;
+    iss >> c >> x >> y >> user;
+    Update update{CellState(c), {x, y}, user};
+    state.lock()->updates.push_back(update);
   } else if (command == "join") {
     int userid;
     std::string username;
     iss >> userid >> username;
     std::cout << absl::StrFormat("User id: %i, name: %s\n", userid, username);
   } else if (command == "reset") {
-    std::lock_guard<std::mutex> guard(mutex);
-    agent->reset();
-    updates.clear();
+    auto s = state.lock();
+    s->agent->reset();
+    s->updates.clear();
   }
 }
 
@@ -142,27 +141,31 @@ int main(int argc, char **argv) {
   // will exit when this connection is closed.
   std::thread thread = std::thread([&client]() { client.run(); });
 
+  Recti view;
   while (!done) {
-    if (agent) {
-      Action a;
+    if (state.lock()->agent) {
+      Action action;
+      Rectf cur_viewf;
       {
-        std::lock_guard<std::mutex> guard(mutex);
-        a = agent->step(updates, false);
-        updates.clear();
+        auto s = state.lock();
+        action = s->agent->step(s->updates, false);
+        s->updates.clear();
+        cur_viewf = s->agent->get_view();
       }
-      Rectf cur_viewf = agent->get_view();
       // Add a small buffer so you can scroll a bit or zoom out once without latency.
       cur_viewf = Rectf::from_center_size(cur_viewf.center(), cur_viewf.size() * 1.5);
       Recti cur_view = cur_viewf.recti();
-      send_action(client, con->get_handle(), a);
+      send_action(client, con->get_handle(), action);
       if (view != cur_view) {
         send_view(client, con->get_handle(), cur_view);
         view = cur_view;
       }
-    } else if (userid > 0) {
-      assert(dims.x > 0 && dims.y > 0);
-      std::lock_guard<std::mutex> guard(mutex);
-      agent = std::make_unique<AgentSFML>(dims, userid, absl::GetFlag(FLAGS_window));
+    } else {
+      auto s = state.lock();
+      if (s->userid > 0) {
+        assert(s->dims.x > 0 && s->dims.y > 0);
+        s->agent = std::make_unique<AgentSFML>(s->dims, s->userid, absl::GetFlag(FLAGS_window));
+      }
     }
 
     std::this_thread::sleep_for(std::chrono::microseconds(1000000/60));
