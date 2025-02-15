@@ -1,4 +1,8 @@
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+
 #include "absl/strings/str_format.h"
 
 #include "agent_websocket.h"
@@ -7,8 +11,34 @@
 #include "point.h"
 
 
+std::string read_file_content(const std::filesystem::path& filename) {
+  std::ifstream file{filename};
+  return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
 
-AgentWebSocket::AgentWebSocket(Pointi dims, int port, int first_user)
+void serve_file(beauty::response& res, const std::filesystem::path& path) {
+  if (path.string().find("..") != std::string::npos) {
+    throw beauty::http_error::client::bad_request("bad request");
+  }
+
+  std::string ext = path.extension();
+  if (auto t = beauty::content_type::types.find(ext); t != beauty::content_type::types.end()) {
+    res.set(t->second);
+  } else {
+    // The more correct thing to do would be to set the content type to
+    // application/octet-stream, but I don't want to serve unknown file types.
+    throw beauty::http_error::client::forbidden("forbidden");
+  }
+
+  if (!std::filesystem::exists(path)) {
+    throw beauty::http_error::client::not_found("not found");
+  }
+
+  res.body() = read_file_content(path);
+}
+
+
+AgentWebSocket::AgentWebSocket(Pointi dims, int port, std::filesystem::path doc_root, int first_user)
     : clients_(), next_userid_(first_user), state_(dims) {
   reset();
 
@@ -23,7 +53,26 @@ AgentWebSocket::AgentWebSocket(Pointi dims, int port, int first_user)
           .on_disconnect = [this](const beauty::ws_context& ctx) { this->on_disconnect(ctx); },
       });
 
+  // Bah, I don't see a way of doing wildcards that allow slashes, so have a cascade of routes.
+  server_.add_route("/:filename")
+      .get([doc_root](const beauty::request& req, beauty::response& res) {
+          serve_file(res, doc_root / req.a("filename").as_string("index.html"));
+      });
+  server_.add_route("/:dir/:filename")
+      .get([doc_root](const beauty::request& req, beauty::response& res) {
+          serve_file(res, doc_root / req.a("dir").as_string() / req.a("filename").as_string("index.html"));
+      });
+  server_.add_route("/:dir1/:dir2/:filename")
+      .get([doc_root](const beauty::request& req, beauty::response& res) {
+          serve_file(res, doc_root / req.a("dir1").as_string() / req.a("dir2").as_string() / req.a("filename").as_string("index.html"));
+      });
+  server_.add_route("/:dir1/:dir2/:dir3/:filename")
+      .get([doc_root](const beauty::request& req, beauty::response& res) {
+          serve_file(res, doc_root / req.a("dir1").as_string() / req.a("dir2").as_string() / req.a("dir3").as_string() / req.a("filename").as_string("index.html"));
+      });
+
   server_.listen(port);
+  std::cout << "Web server started on http://localhost:" << port << std::endl;
   std::cout << "WebSocket server started on ws://localhost:" << port << "/minefield" << std::endl;
 }
 

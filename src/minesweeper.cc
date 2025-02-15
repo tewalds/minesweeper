@@ -1,6 +1,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -69,7 +70,8 @@ int main(int argc, char **argv) {
     agents.push_back(std::make_unique<AgentLast>(dims, agents.size() + 1));
   }
   if (absl::GetFlag(FLAGS_port) > 0) {
-    agents.push_back(std::make_unique<AgentWebSocket>(dims, absl::GetFlag(FLAGS_port), agents.size() + 1));
+    agents.push_back(std::make_unique<AgentWebSocket>(
+        dims, absl::GetFlag(FLAGS_port), std::filesystem::current_path() / "client/", agents.size() + 1));
   }
 
   std::vector<Action> actions;

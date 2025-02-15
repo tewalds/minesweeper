@@ -19,7 +19,7 @@ using session_ptr = std::shared_ptr<beauty::websocket_session>;
 
 class AgentWebSocket : public Agent {
  public:
-  AgentWebSocket(Pointi dims, int port, int first_user);
+  AgentWebSocket(Pointi dims, int port, std::filesystem::path doc_root, int first_user);
   ~AgentWebSocket();
   void reset();
   Action step(const std::vector<Update>& updates, bool paused);
