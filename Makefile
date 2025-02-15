@@ -35,6 +35,7 @@ minesweeper: \
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 minesweeper-client: \
+		beauty/libeauty.a \
 		src/agent_sfml.o \
 		src/minesweeper-client.o \
 		src/point.o
@@ -71,7 +72,7 @@ fresh: clean all
 
 installdeps:
 	sudo apt install \
-		build-essential clang libabsl-dev libboost-all-dev libsfml-dev libwebsocketpp-dev
+		build-essential clang libabsl-dev libboost-all-dev libsfml-dev
 
 gendeps: .Makefile
 

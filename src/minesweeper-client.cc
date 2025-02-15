@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 
-#include <websocketpp/client.hpp>
-#include <websocketpp/config/asio_no_tls_client.hpp>
+#include <beauty/beauty.hpp>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
 #include "absl/strings/str_format.h"
 
 #include "agent_sfml.h"
@@ -31,151 +31,102 @@ struct State {
   int userid = 0;
 };
 
-MutexProtected<State> state;
-bool done = false;
-
-
-bool send(websocketpp::client<websocketpp::config::asio_client>& client, 
-          websocketpp::connection_hdl hdl, const std::string& str) {
-  websocketpp::lib::error_code ec;
-  client.send(hdl, str, websocketpp::frame::opcode::text, ec);
-  if (ec) {
-    std::cout << "Echo failed because: " << ec.message() << std::endl;
-    return false;
-  }
-  return true;
-}
-
-void send_action(
-    websocketpp::client<websocketpp::config::asio_client>& client,
-    websocketpp::connection_hdl hdl,
-    Action a) {
-  if (a.action == OPEN) {
-    send(client, hdl, absl::StrFormat("open %i %i", a.point.x, a.point.y));
-  } else if (a.action == MARK) {
-    send(client, hdl, absl::StrFormat("mark %i %i", a.point.x, a.point.y));
-  } else if (a.action == PASS) {
-    // ignore
-  } else if (a.action == QUIT) {
-    done = true;
-  } else {
-    std::cout << "Dropping action: " << a.action << std::endl;
-  }
-}
-
-void send_view(
-    websocketpp::client<websocketpp::config::asio_client>& client,
-    websocketpp::connection_hdl hdl,
-    Recti view) {
-  send(client, hdl, absl::StrFormat(
-      "view %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y));
-}
-
-void on_message(
-    websocketpp::client<websocketpp::config::asio_client>& client,
-    websocketpp::connection_hdl hdl, 
-    websocketpp::config::asio_client::message_type::ptr msg) {
-  std::string payload = msg->get_payload();
-  std::istringstream iss(payload);
-  std::string command;
-
-  // Parse the command
-  iss >> command;
-
-  if (command == "grid") {
-    int x, y, u;
-    iss >> x >> y >> u;
-    std::cout << absl::StrFormat("grid: %ix%i, userid: %i\n", x, y, u);
-    {
-      auto s = state.lock();
-      s->dims = Pointi(x, y);
-      s->userid = u;
-    }
-    send(client, hdl, absl::StrFormat("register %s", absl::GetFlag(FLAGS_name)));
-  } else if (command == "update") {
-    int c, x, y, user;
-    iss >> c >> x >> y >> user;
-    Update update{CellState(c), {x, y}, user};
-    state.lock()->updates.push_back(update);
-  } else if (command == "join") {
-    int userid;
-    std::string username;
-    iss >> userid >> username;
-    std::cout << absl::StrFormat("User id: %i, name: %s\n", userid, username);
-  } else if (command == "reset") {
-    auto s = state.lock();
-    s->agent->reset();
-    s->updates.clear();
-  }
-}
 
 int main(int argc, char **argv) {
+  absl::SetProgramUsageMessage("Minesweeper client, connect to a server and play minesweeper.\n");
   absl::ParseCommandLine(argc, argv);
 
   std::string uri = absl::StrFormat("ws://%s:%i/minefield", absl::GetFlag(FLAGS_host), absl::GetFlag(FLAGS_port));
   std::cout << "Connecting to: " << uri << std::endl;
 
-  websocketpp::client<websocketpp::config::asio_client> client;
+  bool done = false;
+  MutexProtected<State> state;
 
-  client.clear_access_channels(websocketpp::log::alevel::all);
-  client.clear_error_channels(websocketpp::log::elevel::all);
+  beauty::client client;
 
-  client.init_asio();
+  beauty::ws_handler handler;
+  handler.on_connect = [](const beauty::ws_context& ctx) { };
+  handler.on_receive = [&state](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
+    assert(is_text);
+    std::istringstream iss(std::string(data, size));
+    std::string command;
+    iss >> command;
 
-  client.set_message_handler([&client](auto a, auto b) {on_message(client, a, b);});
-  client.set_close_handler([](auto a) { done = true; });
+    if (command == "grid") {
+      int x, y, u;
+      iss >> x >> y >> u;
+      std::cout << absl::StrFormat("grid: %ix%i, userid: %i\n", x, y, u);
+      auto s = state.lock();
+      s->dims = Pointi(x, y);
+      s->userid = u;
+    } else if (command == "update") {
+      int c, x, y, user;
+      iss >> c >> x >> y >> user;
+      Update update{CellState(c), {x, y}, user};
+      state.lock()->updates.push_back(update);
+    } else if (command == "join") {
+      int userid;
+      std::string username;
+      iss >> userid >> username;
+      std::cout << absl::StrFormat("User id: %i, name: %s\n", userid, username);
+    } else if (command == "reset") {
+      auto s = state.lock();
+      s->agent->reset();
+      s->updates.clear();
+    }
+  };
+  handler.on_disconnect = [&done](const beauty::ws_context& ctx) { done = true; };
+  handler.on_error = [&done](boost::system::error_code ec, const char* what) { done = true; };
 
-  websocketpp::lib::error_code ec;
-  websocketpp::client<websocketpp::config::asio_client>::connection_ptr con = client.get_connection(uri, ec);
-  if (ec) {
-      std::cout << "Connection failed: " << ec.message() << std::endl;
-      return 0;
-  }
-
-  // Note that connect here only requests a connection. No network messages are
-  // exchanged until the event loop starts running in the next line.
-  client.connect(con);
-
-  // Start the ASIO io_service run loop
-  // this will cause a single connection to be made to the server. client.run()
-  // will exit when this connection is closed.
-  std::thread thread = std::thread([&client]() { client.run(); });
+  client.ws(uri, std::move(handler));
 
   Recti view;
-  while (!done) {
-    if (state.lock()->agent) {
-      Action action;
-      Rectf cur_viewf;
-      {
+  try {
+    while (!done) {
+      if (state.lock()->agent) {
+        Action action;
+        Rectf cur_viewf;
+        {
+          auto s = state.lock();
+          action = s->agent->step(s->updates, false);
+          s->updates.clear();
+          cur_viewf = s->agent->get_view();
+        }
+
+        if (action.action == OPEN) {
+          client.ws_send(absl::StrFormat("open %i %i", action.point.x, action.point.y));
+        } else if (action.action == MARK) {
+          client.ws_send(absl::StrFormat("mark %i %i", action.point.x, action.point.y));
+        } else if (action.action == PASS) {
+          // ignore
+        } else if (action.action == QUIT) {
+          done = true;
+        } else {
+          std::cout << "Dropping action: " << action.action << std::endl;
+        }
+
+        // Add a small buffer so you can scroll a bit or zoom out once without latency.
+        cur_viewf = Rectf::from_center_size(cur_viewf.center(), cur_viewf.size() * 1.5);
+        Recti cur_view = cur_viewf.recti();
+        if (view != cur_view) {
+          view = cur_view;
+          client.ws_send(absl::StrFormat(
+              "view %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y));
+        }
+      } else {
         auto s = state.lock();
-        action = s->agent->step(s->updates, false);
-        s->updates.clear();
-        cur_viewf = s->agent->get_view();
+        if (s->userid > 0) {
+          assert(s->dims.x > 0 && s->dims.y > 0);
+          client.ws_send(absl::StrFormat("register %s", absl::GetFlag(FLAGS_name)));
+          s->agent = std::make_unique<AgentSFML>(s->dims, s->userid, absl::GetFlag(FLAGS_window));
+        }
       }
-      // Add a small buffer so you can scroll a bit or zoom out once without latency.
-      cur_viewf = Rectf::from_center_size(cur_viewf.center(), cur_viewf.size() * 1.5);
-      Recti cur_view = cur_viewf.recti();
-      send_action(client, con->get_handle(), action);
-      if (view != cur_view) {
-        send_view(client, con->get_handle(), cur_view);
-        view = cur_view;
-      }
-    } else {
-      auto s = state.lock();
-      if (s->userid > 0) {
-        assert(s->dims.x > 0 && s->dims.y > 0);
-        s->agent = std::make_unique<AgentSFML>(s->dims, s->userid, absl::GetFlag(FLAGS_window));
-      }
+
+      std::this_thread::sleep_for(std::chrono::microseconds(1000000/60));
     }
-
-    std::this_thread::sleep_for(std::chrono::microseconds(1000000/60));
+  } catch(const std::exception& ex) {
+    std::cout << "exception: " << ex.what() << std::endl;
+    return 1;
   }
-
-  // Disconnect.
-  client.close(con->get_handle(), websocketpp::close::status::going_away, "");
-  thread.join();
-
-  // agent.reset();
-
   return 0;
 }
