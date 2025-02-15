@@ -51,7 +51,7 @@ test: \
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LOADLIBES) $(LDLIBS)
 
 beauty/libeauty.a:
-	make -C beauty libeauty.a
+	make -j$(NPROCS) -C beauty libeauty.a
 
 run: all
 	./minesweeper
