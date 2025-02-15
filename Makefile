@@ -45,7 +45,8 @@ test: \
 		src/kdtree.o \
 		src/kdtree_test.o \
 		src/point.o \
-		src/point_test.o
+		src/point_test.o \
+		src/thread_test.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LOADLIBES) $(LDLIBS)
 
 beauty/libeauty.a:
