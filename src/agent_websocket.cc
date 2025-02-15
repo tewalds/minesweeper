@@ -98,10 +98,10 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
     }
   }
 
-  std::lock_guard<std::mutex> guard(actions_mutex_);
-  if (!actions_.empty()) {
-    Action a = actions_.front();
-    actions_.pop();
+  auto actions = actions_.lock();
+  if (!actions->empty()) {
+    Action a = actions->front();
+    actions->pop();
     return a;
   }
   return Action{PASS, {0, 0}, 0};
@@ -168,8 +168,7 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
     Pointi p(x, y);
     if (state_.rect().contains(p)) {
       int user = clients_[ctx.uuid].userid;
-      std::lock_guard<std::mutex> guard(actions_mutex_);
-      actions_.push({OPEN, p, user});
+      actions_.lock()->push({OPEN, p, user});
     }
   } else if (command == "mark") {
     int x, y;
@@ -177,8 +176,7 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
     Pointi p(x, y);
     if (state_.rect().contains(p)) {
       int user = clients_[ctx.uuid].userid;
-      std::lock_guard<std::mutex> guard(actions_mutex_);
-      actions_.push({MARK, p, user});
+      actions_.lock()->push({MARK, p, user});
     }
   } else if (command == "view") {
     int x1, y1, x2, y2;

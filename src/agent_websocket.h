@@ -14,6 +14,7 @@
 #include "agent.h"
 #include "minesweeper.h"
 #include "point.h"
+#include "thread.h"
 
 using session_ptr = std::shared_ptr<beauty::websocket_session>;
 
@@ -44,8 +45,7 @@ class AgentWebSocket : public Agent {
   beauty::server server_;
   absl::flat_hash_map<std::string, ClientInfo> clients_;  // uuid -> client info
   int next_userid_;
-  std::mutex actions_mutex_;
-  std::queue<Action> actions_;
+  MutexProtected<std::queue<Action>> actions_;
 
   struct Cell {
     CellState state;
