@@ -12,6 +12,8 @@ Features:
 
 ## Installation
 
+[![C++ CI](https://github.com/tewalds/minesweeper/actions/workflows/build-test-cpp.yml/badge.svg)](https://github.com/tewalds/minesweeper/actions/workflows/build-test-cpp.yml)
+
 ```bash
 git clone --recurse-submodules https://github.com/tewalds/minesweeper.git
 cd minesweeper
