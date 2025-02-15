@@ -106,13 +106,14 @@ void on_message(
   } else if (command == "reset") {
     std::lock_guard<std::mutex> guard(mutex);
     agent->reset();
+    updates.clear();
   }
 }
 
 int main(int argc, char **argv) {
   absl::ParseCommandLine(argc, argv);
 
-  std::string uri = absl::StrFormat("ws://%s:%i", absl::GetFlag(FLAGS_host), absl::GetFlag(FLAGS_port));
+  std::string uri = absl::StrFormat("ws://%s:%i/minefield", absl::GetFlag(FLAGS_host), absl::GetFlag(FLAGS_port));
   std::cout << "Connecting to: " << uri << std::endl;
 
   websocketpp::client<websocketpp::config::asio_client> client;

@@ -7,43 +7,46 @@
 #include "point.h"
 
 
+
 AgentWebSocket::AgentWebSocket(Pointi dims, int port, int first_user)
-    : client_map_(), next_userid_(first_user), state_(dims) {
+    : clients_(), next_userid_(first_user), state_(dims) {
+  reset();
 
-  server_.clear_access_channels(websocketpp::log::alevel::all);
-  server_.clear_error_channels(websocketpp::log::elevel::all);
-
-  server_.init_asio();
-
-  server_.set_open_handler([this](auto a) { return this->on_open(a); });
-  server_.set_message_handler([this](auto a, auto b) { return this->on_message(a, b); });
-  server_.set_close_handler([this](auto a) { return this->on_close(a); });
+  server_.add_route("/minefield")
+      .ws(beauty::ws_handler{
+          .on_connect = [this](const beauty::ws_context& ctx) { this->on_connect(ctx); },
+          .on_receive = [this](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
+            if (is_text) {
+              this->on_receive(ctx, std::string(data, size));
+            }
+          },
+          .on_disconnect = [this](const beauty::ws_context& ctx) { this->on_disconnect(ctx); },
+      });
 
   server_.listen(port);
-  server_.start_accept();
-  thread_ = std::thread([this]() {server_.run(); });
-  std::cout << "WebSocket server started on ws://localhost:" << port << std::endl;
-
-  reset();
+  std::cout << "WebSocket server started on ws://localhost:" << port << "/minefield" << std::endl;
 }
 
 AgentWebSocket::~AgentWebSocket() {
   server_.stop();
-  thread_.join();
 }
 
 void AgentWebSocket::reset() {
   state_.fill({HIDDEN, 0});
-  for (auto& client_it : client_map_) {
-    send(client_it.first, "reset");
-  }
+  broadcast("reset");
 }
 
 Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   // Broadcast updates.
   for (Update u: updates) {
     state_[u.point] = {u.state, u.user};
-    broadcast_update(u);
+    for (auto& [uuid, client] : clients_) {
+      if (client.view.contains(u.point)) {
+        if (auto s = client.session.lock(); s) {
+          send_update(s, u);
+        }
+      }
+    }
   }
 
   std::lock_guard<std::mutex> guard(actions_mutex_);
@@ -55,36 +58,26 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   return Action{PASS, {0, 0}, 0};
 }
 
-void AgentWebSocket::send(websocketpp::connection_hdl hdl, const std::string& str) {
-  server_.send(hdl, str, websocketpp::frame::opcode::text);
-}
-
 void AgentWebSocket::broadcast(const std::string& str) {
-  for (auto& client_it : client_map_) {
-    send(client_it.first, str);
-  }
-}
-
-void AgentWebSocket::broadcast_update(Update u) {
-  for (auto& client_it : client_map_) {
-    if (client_it.second.view.contains(u.point)) {
-      send_update(client_it.first, u);
+  for (auto& [uuid, client] : clients_) {
+    if (auto s = client.session.lock(); s) {
+      s->send(std::string(str));
     }
   }
 }
 
-void AgentWebSocket::send_update(websocketpp::connection_hdl hdl, Update u) {
-  send(hdl, absl::StrFormat("update %d %d %d %d", u.state, u.point.x, u.point.y, u.user));
+void AgentWebSocket::send_update(const session_ptr& session, Update u) {
+  session->send(absl::StrFormat("update %d %d %d %d", u.state, u.point.x, u.point.y, u.user));
 }
 
-int AgentWebSocket::send_rect(websocketpp::connection_hdl hdl, Recti r) {
+int AgentWebSocket::send_rect(const session_ptr& session, Recti r) {
   // TODO: Send in a more compact format. Maybe different formats for dense vs sparse area.
   int sent = 0;
   for (int x = r.left(); x < r.right(); x++) {
-    for (int y = r.top(); y < r.right(); y++) {
+    for (int y = r.top(); y < r.bottom(); y++) {
       Cell c = state_(x, y);
       if (c.state != HIDDEN) {
-        send_update(hdl, {c.state, {x, y}, c.user});
+        send_update(session, {c.state, {x, y}, c.user});
         sent++;
       }
     }
@@ -92,19 +85,23 @@ int AgentWebSocket::send_rect(websocketpp::connection_hdl hdl, Recti r) {
   return sent;
 }
 
-void AgentWebSocket::on_open(
-    websocketpp::connection_hdl hdl) {
+void AgentWebSocket::on_connect(const beauty::ws_context& ctx) {
   std::cout << "Connection opened" << std::endl;
   int userid = next_userid_++;
-  client_map_[hdl] = {"", userid, Recti()};
-  send(hdl, absl::StrFormat("grid %i %i %i", state_.width(), state_.height(), userid));
+  clients_[ctx.uuid] = ClientInfo{
+    .uuid = ctx.uuid,
+    .session = ctx.ws_session,
+    .name = "",
+    .userid = userid,
+    .view = Recti(),
+  };
+  if (auto s = ctx.ws_session.lock(); s) {
+    s->send(absl::StrFormat("grid %i %i %i", state_.width(), state_.height(), userid));
+  }
 }
 
-void AgentWebSocket::on_message(
-    websocketpp::connection_hdl hdl,
-    websocketpp::server<websocketpp::config::asio>::message_ptr msg) {
-  std::string payload = msg->get_payload();
-  std::istringstream iss(payload);
+void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string& str) {
+  std::istringstream iss(str);
   std::string command;
 
   // Parse the command
@@ -113,15 +110,15 @@ void AgentWebSocket::on_message(
   if (command == "register") {
     std::string name;
     iss >> name;
-    client_map_[hdl].name = name;
-    std::cout << absl::StrFormat("New user id: %i, name: %s\n", client_map_[hdl].userid, name);
-    broadcast(absl::StrFormat("join %d %s", client_map_[hdl].userid, name));
+    clients_[ctx.uuid].name = name;
+    std::cout << absl::StrFormat("New user id: %i, name: %s\n", clients_[ctx.uuid].userid, name);
+    broadcast(absl::StrFormat("join %d %s", clients_[ctx.uuid].userid, name));
   } else if (command == "open") {
     int x, y;
     iss >> x >> y;
     Pointi p(x, y);
     if (state_.rect().contains(p)) {
-      int user = client_map_[hdl].userid;
+      int user = clients_[ctx.uuid].userid;
       std::lock_guard<std::mutex> guard(actions_mutex_);
       actions_.push({OPEN, p, user});
     }
@@ -130,7 +127,7 @@ void AgentWebSocket::on_message(
     iss >> x >> y;
     Pointi p(x, y);
     if (state_.rect().contains(p)) {
-      int user = client_map_[hdl].userid;
+      int user = clients_[ctx.uuid].userid;
       std::lock_guard<std::mutex> guard(actions_mutex_);
       actions_.push({MARK, p, user});
     }
@@ -140,18 +137,19 @@ void AgentWebSocket::on_message(
     std::optional<Recti> new_view = state_.rect().intersection({{x1, y1}, {x2, y2}});
     // TODO: Check that the view isn't too big? How big is too big?
     if (new_view) {
-      for (Recti r : new_view->difference(client_map_[hdl].view)) {
-        send_rect(hdl, r);
+      for (Recti r : new_view->difference(clients_[ctx.uuid].view)) {
+        if (auto s = ctx.ws_session.lock(); s) {
+          send_rect(s, r);
+        }
       }
-      client_map_[hdl].view = *new_view;
+      clients_[ctx.uuid].view = *new_view;
     }
   } else {
     std::cout << "Unknown command: " << command << std::endl;
   }
 }
 
-void AgentWebSocket::on_close(
-    websocketpp::connection_hdl hdl) {
+void AgentWebSocket::on_disconnect(const beauty::ws_context& ctx) {
   std::cout << "Connection closed" << std::endl;
-  client_map_.erase(hdl.lock());
+  clients_.erase(ctx.uuid);
 }

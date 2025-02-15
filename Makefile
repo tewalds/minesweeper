@@ -3,7 +3,7 @@
 # https://www.gnu.org/software/make/manual/html_node/Implicit-Variables.html
 # CXX = g++
 CXX = clang++
-CPPFLAGS = -Wall -std=c++23 -pthread -g -O3 -I.
+CPPFLAGS = -Wall -std=c++23 -pthread -g -O3 -I. -Ibeauty/include
 CPPFLAGS += -fvisibility=hidden -Bsymbolic  # https://www.youtube.com/watch?v=_enXuIxuNV4
 # LDFLAGS =
 
@@ -12,6 +12,7 @@ CPPFLAGS += -fvisibility=hidden -Bsymbolic  # https://www.youtube.com/watch?v=_e
 # LDFLAGS += -pg -g
 
 LDLIBS = -lsfml-graphics -lsfml-window -lsfml-system
+LDLIBS += -Lbeauty -leauty
 LDLIBS += $$(pkg-config absl_algorithm_container --libs)
 LDLIBS += $$(pkg-config absl_flags --libs)
 LDLIBS += $$(pkg-config absl_flags_parse --libs)
@@ -22,6 +23,7 @@ LDLIBS += $$(pkg-config absl_strings --libs)
 all: minesweeper minesweeper-client
 
 minesweeper: \
+		beauty/libeauty.a \
 		src/agent_last.o \
 		src/agent_random.o \
 		src/agent_sfml.o \
@@ -46,6 +48,9 @@ test: \
 		src/point_test.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LOADLIBES) $(LDLIBS)
 
+beauty/libeauty.a:
+	make -C beauty libeauty.a
+
 run: all
 	./minesweeper
 
@@ -59,6 +64,7 @@ clean:
 		minesweeper \
 		minesweeper-client \
 		test
+	make -C beauty clean
 
 fresh: clean all
 
@@ -69,6 +75,6 @@ installdeps:
 gendeps: .Makefile
 
 .Makefile: # contains the actual dependencies for all the .o files above
-	./gendeps.sh > .Makefile
+	CXX="${CXX}" CPPFLAGS="${CPPFLAGS}" ./gendeps.sh catch2 src > .Makefile
 
 include .Makefile

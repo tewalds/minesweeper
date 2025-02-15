@@ -2,18 +2,20 @@
 #pragma once
 
 #include <chrono>
+#include <filesystem>
 #include <map>
 #include <queue>
 #include <thread>
 #include <vector>
 
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
+#include <absl/container/flat_hash_map.h>
+#include <beauty/beauty.hpp>
 
 #include "agent.h"
 #include "minesweeper.h"
 #include "point.h"
 
+using session_ptr = std::shared_ptr<beauty::websocket_session>;
 
 class AgentWebSocket : public Agent {
  public:
@@ -23,28 +25,24 @@ class AgentWebSocket : public Agent {
   Action step(const std::vector<Update>& updates, bool paused);
 
  private:
-  void on_open(websocketpp::connection_hdl hdl);
-  void on_message(websocketpp::connection_hdl hdl,
-                  websocketpp::server<websocketpp::config::asio>::message_ptr msg);
-  void on_close(websocketpp::connection_hdl hdl);
+  void on_connect(const beauty::ws_context& ctx);
+  void on_receive(const beauty::ws_context& ctx, const std::string& msg);
+  void on_disconnect(const beauty::ws_context& ctx);
 
-  void send(websocketpp::connection_hdl hdl, const std::string& str);
-  void broadcast_update(Update u);
-  void send_update(websocketpp::connection_hdl hdl, Update u);
-  int send_rect(websocketpp::connection_hdl hdl, Recti r);
+  void send_update(const session_ptr& session, Update u);
+  int send_rect(const session_ptr& session, Recti r);
   void broadcast(const std::string& str);
 
   struct ClientInfo {
-      std::string name;
-      int userid;
-      Recti view;
+    std::string uuid;  // related to the websocket session
+    std::weak_ptr<beauty::websocket_session> session;
+    std::string name;
+    int userid;
+    Recti view;
   };
 
-  std::thread thread_;
-  websocketpp::server<websocketpp::config::asio> server_;
-  // It'd be nice to use a flat_hash_map, but connection_hdl is a weak_ptr that doesn't hash.
-  std::map<websocketpp::connection_hdl, ClientInfo,
-           std::owner_less<websocketpp::connection_hdl>> client_map_;
+  beauty::server server_;
+  absl::flat_hash_map<std::string, ClientInfo> clients_;  // uuid -> client info
   int next_userid_;
   std::mutex actions_mutex_;
   std::queue<Action> actions_;
