@@ -390,6 +390,89 @@ const PlayScreen = {
         const isServerMode = GameState.connection instanceof WebSocketGameConnection;
         console.log('PlayScreen - Connection mode:', isServerMode ? 'server' : 'local');
 
+        // Set up event handlers for connection first if in server mode
+        if (isServerMode) {
+            console.log('PlayScreen - Setting up server mode handlers');
+
+            // Check if we already have grid info
+            const existingGridInfo = GameState.connection.getGridInfo();
+            if (existingGridInfo) {
+                console.log('Using existing grid info:', existingGridInfo);
+                MinesweeperDB.gridWidth = existingGridInfo.width;
+                MinesweeperDB.gridHeight = existingGridInfo.height;
+            }
+
+            // Debug current state
+            console.log('Current GameState:', {
+                user: GameState.currentUser,
+                connection: GameState.connection ? 'Connected' : 'Not connected'
+            });
+
+            GameState.connection.onUpdate = (state, x, y, userId) => {
+                console.log('🔄 Server update received:', {
+                    state,
+                    stateDesc: this.getStateDescription(state),
+                    x,
+                    y,
+                    userId,
+                    currentUser: GameState.currentUser.username,
+                    isCurrentUser: userId === GameState.currentUser.userId
+                });
+
+                this.updateCell(x, y, state);
+            };
+
+            GameState.connection.onGridInfo = (width, height, userId) => {
+                console.log('📊 Server grid info received:', {
+                    width,
+                    height,
+                    userId,
+                    currentUser: GameState.currentUser.username,
+                    isCurrentUser: userId === GameState.currentUser.userId,
+                    previousDimensions: {
+                        width: MinesweeperDB.gridWidth,
+                        height: MinesweeperDB.gridHeight
+                    }
+                });
+
+                // Store grid dimensions and update display
+                MinesweeperDB.gridWidth = width;
+                MinesweeperDB.gridHeight = height;
+
+                // Update grid CSS properties
+                const grid = document.querySelector('.game-grid');
+                if (grid) {
+                    grid.style.width = `${width * this.CELL_SIZE}px`;
+                    grid.style.height = `${height * this.CELL_SIZE}px`;
+                    grid.style.gridTemplateColumns = `repeat(${width}, ${this.CELL_SIZE}px)`;
+                    grid.style.gridTemplateRows = `repeat(${height}, ${this.CELL_SIZE}px)`;
+                }
+
+                // Clear all existing cells since we're resizing
+                this.visibleCells.forEach(cell => cell.remove());
+                this.visibleCells.clear();
+
+                this.centerGrid();
+
+                // Force a complete refresh of visible cells
+                const container = document.querySelector('.game-container');
+                if (container && grid) {
+                    this.updateVisibleCells(container, grid);
+                }
+
+                console.log('Grid dimensions updated and centered');
+            };
+
+            GameState.connection.onPlayerJoin = (userId, name) => {
+                console.log('👤 Player joined:', {
+                    userId,
+                    name,
+                    currentUser: GameState.currentUser.username,
+                    isCurrentUser: userId === GameState.currentUser.userId
+                });
+            };
+        }
+
         // Only try to get score in local mode
         const score = isServerMode ? 0 : await MinesweeperDB.getScore(GameState.currentUser.username);
         console.log('PlayScreen - Initial score:', score);
@@ -426,73 +509,6 @@ const PlayScreen = {
         this.attachGameHandlers();
         console.log('PlayScreen - Game handlers attached');
 
-        // Set up event handlers for connection
-        if (isServerMode) {
-            console.log('PlayScreen - Setting up server mode handlers');
-
-            // Debug current state
-            console.log('Current GameState:', {
-                user: GameState.currentUser,
-                connection: GameState.connection ? 'Connected' : 'Not connected'
-            });
-
-            GameState.connection.onUpdate = (state, x, y, userId) => {
-                console.log('🔄 Server update received:', {
-                    state,
-                    stateDesc: this.getStateDescription(state),
-                    x,
-                    y,
-                    userId,
-                    currentUser: GameState.currentUser.username,
-                    isCurrentUser: userId === GameState.currentUser.userId
-                });
-
-                // Log current grid state before update
-                console.log('Grid state before update:', {
-                    revealed: Array.from(MinesweeperDB.mines.revealed),
-                    markers: Array.from(MinesweeperDB.mines.markers.entries())
-                });
-
-                this.updateCell(x, y, state);
-
-                // Log state after update
-                console.log('Grid state after update:', {
-                    revealed: Array.from(MinesweeperDB.mines.revealed),
-                    markers: Array.from(MinesweeperDB.mines.markers.entries())
-                });
-            };
-
-            GameState.connection.onGridInfo = (width, height, userId) => {
-                console.log('📊 Server grid info received:', {
-                    width,
-                    height,
-                    userId,
-                    currentUser: GameState.currentUser.username,
-                    isCurrentUser: userId === GameState.currentUser.userId,
-                    previousDimensions: {
-                        width: MinesweeperDB.gridWidth,
-                        height: MinesweeperDB.gridHeight
-                    }
-                });
-
-                // Store grid dimensions and update display
-                MinesweeperDB.gridWidth = width;
-                MinesweeperDB.gridHeight = height;
-                this.centerGrid();
-
-                console.log('Grid dimensions updated and centered');
-            };
-
-            GameState.connection.onPlayerJoin = (userId, name) => {
-                console.log('👤 Player joined:', {
-                    userId,
-                    name,
-                    currentUser: GameState.currentUser.username,
-                    isCurrentUser: userId === GameState.currentUser.userId
-                });
-            };
-        }
-
         // Start update loops
         this.startUpdates();
         this.startMarkerUpdates();
@@ -524,13 +540,18 @@ const PlayScreen = {
                 revealed: new Set(),
                 markers: new Map()
             };
-            // Grid dimensions will be set when we receive onGridInfo
-            MinesweeperDB.gridWidth = 100;  // Default size until server sends real dimensions
-            MinesweeperDB.gridHeight = 100;
-            console.log('Initialized with temporary dimensions:', {
-                width: MinesweeperDB.gridWidth,
-                height: MinesweeperDB.gridHeight
-            });
+
+            // Check if we already have grid info from the server
+            const gridInfo = GameState.connection.getGridInfo();
+            if (gridInfo) {
+                console.log('Using cached grid info:', gridInfo);
+                MinesweeperDB.gridWidth = gridInfo.width;
+                MinesweeperDB.gridHeight = gridInfo.height;
+            } else {
+                console.log('No grid info yet, starting with 0x0');
+                MinesweeperDB.gridWidth = 0;
+                MinesweeperDB.gridHeight = 0;
+            }
         } else {
             // In local mode, initialize from DB
             console.log('Loading local grid from DB...');
@@ -546,6 +567,8 @@ const PlayScreen = {
         if (grid) {
             // Set up grid CSS properties
             grid.style.display = 'grid';
+            grid.style.width = `${MinesweeperDB.gridWidth * this.CELL_SIZE}px`;
+            grid.style.height = `${MinesweeperDB.gridHeight * this.CELL_SIZE}px`;
             grid.style.gridTemplateColumns = `repeat(${MinesweeperDB.gridWidth}, ${this.CELL_SIZE}px)`;
             grid.style.gridTemplateRows = `repeat(${MinesweeperDB.gridHeight}, ${this.CELL_SIZE}px)`;
             grid.style.position = 'relative';
@@ -1356,6 +1379,9 @@ const PlayScreen = {
         // Update or create visible cells
         for (let y = bounds.top; y < bounds.bottom; y++) {
             for (let x = bounds.left; x < bounds.right; x++) {
+                // Skip if outside grid boundaries
+                if (x >= MinesweeperDB.gridWidth || y >= MinesweeperDB.gridHeight) continue;
+
                 const key = `${x},${y}`;
                 cellsToRemove.delete(key);
 

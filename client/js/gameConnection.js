@@ -87,6 +87,7 @@ class WebSocketGameConnection extends GameConnection {
         this.ws = null;
         this.connected = false;
         this.registrationPromise = null;  // Track registration completion
+        this.gridInfo = null;  // Store grid info
     }
 
     async testConnection() {
@@ -130,6 +131,7 @@ class WebSocketGameConnection extends GameConnection {
                             case 'grid': {
                                 const [width, height, userId] = args.map(Number);
                                 this.userId = userId;  // Store userId for later use
+                                this.gridInfo = { width, height, userId };  // Store grid info
                                 this.onGridInfo(width, height, userId);
                                 break;
                             }
@@ -268,5 +270,9 @@ class WebSocketGameConnection extends GameConnection {
                 reject(error);
             }
         });
+    }
+
+    getGridInfo() {
+        return this.gridInfo;
     }
 } 
