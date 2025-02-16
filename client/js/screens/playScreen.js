@@ -409,16 +409,6 @@ const PlayScreen = {
             });
 
             GameState.connection.onUpdate = (state, x, y, userId) => {
-                console.log('🔄 Server update received:', {
-                    state,
-                    stateDesc: this.getStateDescription(state),
-                    x,
-                    y,
-                    userId,
-                    currentUser: GameState.currentUser.username,
-                    isCurrentUser: userId === GameState.currentUser.userId
-                });
-
                 this.updateCell(x, y, state);
             };
 
@@ -590,13 +580,6 @@ const PlayScreen = {
     },
 
     updateCell: function (x, y, state) {
-        console.log('🎯 Updating cell:', {
-            position: { x, y },
-            state,
-            stateDesc: this.getStateDescription(state),
-            key: `${x},${y}`
-        });
-
         const key = `${x},${y}`;
         const previousState = {
             wasRevealed: MinesweeperDB.mines.revealed.has(key),
@@ -604,15 +587,12 @@ const PlayScreen = {
             markerDetails: MinesweeperDB.mines.markers.get(key)
         };
 
-        console.log('Cell previous state:', previousState);
-
         // States from server:
         // 0-8: Revealed cell with N adjacent mines
         // 9: Revealed mine
         // 10: Hidden cell
         // 11: Marked/flagged cell
         if (state >= 0 && state <= 8) { // Revealed cell with N adjacent mines
-            console.log(`Setting cell ${key} to show ${state} adjacent mines`);
             MinesweeperDB.mines.revealed.add(key);
             MinesweeperDB.mines.markers.delete(key); // Remove any flags
             const cell = this.visibleCells.get(key);
@@ -627,7 +607,6 @@ const PlayScreen = {
                 }
             }
         } else if (state === 9) { // BOMB
-            console.log(`Setting cell ${key} to show bomb`);
             MinesweeperDB.mines.revealed.add(key);
             MinesweeperDB.mines.markers.delete(key);
             const cell = this.visibleCells.get(key);
@@ -636,7 +615,6 @@ const PlayScreen = {
                 cell.textContent = '💣';
             }
         } else if (state === 10) { // HIDDEN
-            console.log(`Setting cell ${key} to hidden`);
             MinesweeperDB.mines.revealed.delete(key);
             MinesweeperDB.mines.markers.delete(key);
             const cell = this.visibleCells.get(key);
@@ -645,7 +623,6 @@ const PlayScreen = {
                 cell.textContent = '';
             }
         } else if (state === 11) { // MARKED
-            console.log(`Setting cell ${key} to marked`);
             MinesweeperDB.mines.revealed.delete(key);
             MinesweeperDB.mines.markers.set(key, {
                 username: GameState.currentUser.username,
@@ -664,7 +641,6 @@ const PlayScreen = {
             markerDetails: MinesweeperDB.mines.markers.get(key)
         };
 
-        console.log('Cell new state:', newState);
     },
 
     createGrid: function () {
@@ -1415,7 +1391,6 @@ const PlayScreen = {
 
     // Update the states of visible cells
     updateVisibleCellStates: function () {
-        console.log('Updating visible cell states');
         // Ensure mines data structure exists
         if (!MinesweeperDB.mines) {
             console.warn('Mines data structure not initialized');
@@ -1455,12 +1430,6 @@ const PlayScreen = {
                     update.color = marker.color;
                 }
             }
-
-            console.log(`Updating cell ${key}:`, {
-                classes: update.classes,
-                html: update.html,
-                color: update.color
-            });
 
             updates.push(update);
         }

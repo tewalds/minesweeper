@@ -125,7 +125,6 @@ class WebSocketGameConnection extends GameConnection {
                 this.ws.onmessage = (event) => {
                     try {
                         const [command, ...args] = event.data.split(' ');
-                        console.log('Received command:', command, 'args:', args);
 
                         switch (command) {
                             case 'grid': {
@@ -137,7 +136,6 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'update': {
                                 const [state, x, y, updateUserId] = args.map(Number);
-                                console.log('Update received:', { state, x, y, updateUserId });
                                 this.onUpdate(state, x, y, updateUserId);
                                 break;
                             }
