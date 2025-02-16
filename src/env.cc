@@ -18,7 +18,6 @@ std::vector<Update> Env::reset() {
       state_(x, y).state = HIDDEN;
       state_(x, y).bomb = (absl::Uniform(bitgen_, 0.0, 1.0) < bomb_percentage_);
       state_(x, y).user = 0;
-      // std::cout << absl::StrFormat("Cell(%i, %i)\n", state_(x, y).state, state_(x, y).bomb);
     }
   }
 
@@ -46,14 +45,7 @@ std::vector<Update> Env::step(Action action) {
   while (!q.empty()) {
     Action a = q.back();
     q.pop_back();
-    // std::cout << absl::StrFormat("Env.step: got Action(%i, %i, %i, %i)", 
-    //                              a.action, a.point.x, a.point.y, a.user) << std::endl;
     if (a.action == MARK) {
-      if (!state_[a.point].bomb) {
-        // TODO(tewalds): remove?
-        std::cout << absl::StrFormat("Bad mark: %i, %i\n", a.point.x, a.point.y);
-        continue;
-      }
       if (state_[a.point].state == MARKED) {
         if (state_[a.point].user == a.user) {
           // I marked it, so unmark.
@@ -76,7 +68,9 @@ std::vector<Update> Env::step(Action action) {
     } else if (a.action == OPEN) {
       if (state_[a.point].state == HIDDEN) {
         if (state_[a.point].bomb) {
-          std::cout << "BOOOM" << std::endl;  // TODO: remove?
+          CellState c = BOMB;
+          state_[a.point].state = c;
+          updates.push_back({c, a.point, a.user});
         } else {
           // Compute and reveal the true value
           int b = 0;
@@ -97,10 +91,6 @@ std::vector<Update> Env::step(Action action) {
             }
           }
         }
-      } else if (state_[a.point].state == MARKED) {
-        // std::cout << "Invalid open action, already marked\n";
-      } else if (a.user != 0) {
-        // std::cout << "Invalid open action, already open\n";
       }
     }
   }
