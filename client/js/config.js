@@ -1,13 +1,24 @@
 // Configuration management for the Minesweeper game
 const Config = {
     SERVER: {
-        // Default for local development
-        DEFAULT_URL: 'ws://localhost:9001/minefield',
+        // Get the current hostname
+        get DEFAULT_URL() {
+            const hostname = window.location.hostname || 'localhost';
+            return `ws://${hostname}:9001/minefield`;
+        },
 
         // List of known servers
         SERVERS: [
-            { name: 'Local Development', url: 'ws://localhost:9001/minefield' },
-            { name: 'Local Network', url: 'ws://localhost:9001/minefield' }, // Update this when deploying
+            {
+                get name() {
+                    const hostname = window.location.hostname || 'localhost';
+                    return `${hostname} Server`;
+                },
+                get url() {
+                    const hostname = window.location.hostname || 'localhost';
+                    return `ws://${hostname}:9001/minefield`;
+                }
+            }
         ],
 
         // Get from localStorage or environment
