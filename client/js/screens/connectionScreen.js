@@ -1,5 +1,6 @@
 const ConnectionScreen = {
     show: async function (container) {
+        const hostname = window.location.hostname || 'localhost';
         container.innerHTML = `
             <div class="connection-choice">
                 <h2>Choose Game Mode</h2>
@@ -8,7 +9,7 @@ const ConnectionScreen = {
                     <button class="choice-btn server-btn">
                         <i class="fas fa-globe"></i>
                         Connect to Game Server
-                        <small>Local Development (ws://localhost:9001/minefield)</small>
+                        <small>Server: ${hostname}:9001</small>
                     </button>
                     
                     <button class="choice-btn local-btn">
