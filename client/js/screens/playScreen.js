@@ -614,6 +614,12 @@ const PlayScreen = {
         // Initialize the grid container
         const grid = document.querySelector('.game-grid');
         if (grid) {
+            // Set up grid CSS properties
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = `repeat(${MinesweeperDB.gridWidth}, ${this.CELL_SIZE}px)`;
+            grid.style.gridTemplateRows = `repeat(${MinesweeperDB.gridHeight}, ${this.CELL_SIZE}px)`;
+            grid.style.position = 'relative';
+            grid.style.transformOrigin = 'top left';
             grid.style.setProperty('--cell-size', `${this.CELL_SIZE}px`);
             console.log('Grid container initialized with cell size:', this.CELL_SIZE);
         }
@@ -717,16 +723,13 @@ const PlayScreen = {
     },
 
     getPlayerDirection: function (playerX, playerY) {
-        // Convert grid coordinates to screen coordinates
         const container = document.querySelector('.game-container');
         if (!container) return 0;
 
         // Get current viewport center in grid coordinates
         const rect = container.getBoundingClientRect();
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
-        const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE - gridCenterX;
-        const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE - gridCenterY;
+        const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE;
+        const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE;
 
         // Calculate direction from viewport center to player
         const dx = playerX - viewportCenterX;
@@ -755,12 +758,10 @@ const PlayScreen = {
         if (!container) return null;
 
         const rect = container.getBoundingClientRect();
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
 
-        // Convert grid coordinates to screen coordinates, accounting for centered origin and cursor offset
-        const screenX = this.offsetX + ((x + gridCenterX) * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_X * this.zoom);
-        const screenY = this.offsetY + ((y + gridCenterY) * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_Y * this.zoom);
+        // Convert grid coordinates to screen coordinates
+        const screenX = this.offsetX + (x * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_X * this.zoom);
+        const screenY = this.offsetY + (y * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_Y * this.zoom);
 
         return {
             x: screenX,
@@ -861,7 +862,7 @@ const PlayScreen = {
             // Ensure current zoom is not below minimum
             this.zoom = Math.max(this.zoom, this.MIN_ZOOM);
 
-            // Calculate the center position, accounting for centered origin
+            // Center the grid based on top-left origin
             this.offsetX = (gameContainer.clientWidth - gridWidth * this.zoom) / 2;
             this.offsetY = (gameContainer.clientHeight - gridHeight * this.zoom) / 2;
 
@@ -1364,21 +1365,19 @@ const PlayScreen = {
 
         const rect = container.getBoundingClientRect();
         const scale = 1 / this.zoom;
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
 
-        // Convert screen coordinates to grid coordinates, accounting for centered origin
-        let left = Math.floor((-this.offsetX * scale) / this.CELL_SIZE) - this.RENDER_MARGIN - gridCenterX;
-        let top = Math.floor((-this.offsetY * scale) / this.CELL_SIZE) - this.RENDER_MARGIN - gridCenterY;
-        let right = Math.ceil((rect.width * scale - this.offsetX * scale) / this.CELL_SIZE) + this.RENDER_MARGIN - gridCenterX;
-        let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN - gridCenterY;
+        // Convert screen coordinates to grid coordinates
+        let left = Math.floor((-this.offsetX * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
+        let top = Math.floor((-this.offsetY * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
+        let right = Math.ceil((rect.width * scale - this.offsetX * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
+        let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
 
-        // Clamp to grid boundaries, accounting for centered origin
+        // Clamp to grid boundaries
         const bounds = {
-            left: Math.max(-gridCenterX, left),
-            top: Math.max(-gridCenterY, top),
-            right: Math.min(gridCenterX, right),
-            bottom: Math.min(gridCenterY, bottom)
+            left: Math.max(0, left),
+            top: Math.max(0, top),
+            right: Math.min(MinesweeperDB.gridWidth, right),
+            bottom: Math.min(MinesweeperDB.gridHeight, bottom)
         };
 
         // Only send view update if it changed
@@ -1530,11 +1529,9 @@ const PlayScreen = {
         cell.dataset.x = x;
         cell.dataset.y = y;
 
-        // Offset grid coordinates to center 0,0
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
-        cell.style.gridColumn = x + gridCenterX + 1;
-        cell.style.gridRow = y + gridCenterY + 1;
+        // Use grid coordinates directly, with 0/0 at top-left
+        cell.style.gridColumn = x + 1; // +1 because CSS grid is 1-based
+        cell.style.gridRow = y + 1;
         return cell;
     },
 
