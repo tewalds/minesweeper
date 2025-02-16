@@ -119,38 +119,7 @@ const PlayScreen = {
         } else if (action === 'unflag') {
             MinesweeperDB.mines.markers.delete(key);
         } else if (action === 'reveal') {
-            // Handle auto-reveal for empty cells
-            const cellsToReveal = new Set();
-            const queue = [[x, y]];
-
-            while (queue.length > 0) {
-                const [currX, currY] = queue.shift();
-                const currKey = `${currX},${currY}`;
-
-                if (cellsToReveal.has(currKey)) continue;
-
-                cellsToReveal.add(currKey);
-                MinesweeperDB.mines.revealed.add(currKey);
-
-                // If it's an empty cell (no adjacent mines), queue adjacent cells
-                if (!MinesweeperDB.isMine(currX, currY) && MinesweeperDB.getAdjacentMines(currX, currY) === 0) {
-                    // Check all adjacent cells
-                    for (let dx = -1; dx <= 1; dx++) {
-                        for (let dy = -1; dy <= 1; dy++) {
-                            if (dx === 0 && dy === 0) continue;
-                            const newX = currX + dx;
-                            const newY = currY + dy;
-                            const newKey = `${newX},${newY}`;
-                            if (MinesweeperDB.isValidPosition(newX, newY) &&
-                                !MinesweeperDB.mines.revealed.has(newKey) &&
-                                !cellsToReveal.has(newKey) &&
-                                !MinesweeperDB.mines.markers.has(newKey)) {
-                                queue.push([newX, newY]);
-                            }
-                        }
-                    }
-                }
-            }
+            MinesweeperDB.mines.revealed.add(key);
         }
 
         // Force an immediate visual update
@@ -217,45 +186,6 @@ const PlayScreen = {
                     await MinesweeperDB.revealCell(x, y, username);
                     if (username !== GameState.currentUser.username) {
                         MinesweeperAI.updateKnowledge(username, x, y, MinesweeperDB.getAdjacentMines(x, y));
-                    }
-
-                    // Then check if it's an empty cell and do flood fill
-                    if (!MinesweeperDB.isMine(x, y) && MinesweeperDB.getAdjacentMines(x, y) === 0) {
-                        const queue = [[x, y]];
-                        const revealed = new Set([key]);
-
-                        while (queue.length > 0) {
-                            const [currX, currY] = queue.shift();
-
-                            // Check all adjacent cells
-                            for (let dx = -1; dx <= 1; dx++) {
-                                for (let dy = -1; dy <= 1; dy++) {
-                                    if (dx === 0 && dy === 0) continue;
-
-                                    const newX = currX + dx;
-                                    const newY = currY + dy;
-                                    const newKey = `${newX},${newY}`;
-
-                                    if (!revealed.has(newKey) &&
-                                        MinesweeperDB.isValidPosition(newX, newY) &&
-                                        !MinesweeperDB.mines.revealed.has(newKey) &&
-                                        !MinesweeperDB.mines.markers.has(newKey)) {
-
-                                        revealed.add(newKey);
-                                        await MinesweeperDB.revealCell(newX, newY, username);
-                                        if (username !== GameState.currentUser.username) {
-                                            MinesweeperAI.updateKnowledge(username, newX, newY, MinesweeperDB.getAdjacentMines(newX, newY));
-                                        }
-
-                                        // If this is also an empty cell, add it to queue
-                                        if (!MinesweeperDB.isMine(newX, newY) &&
-                                            MinesweeperDB.getAdjacentMines(newX, newY) === 0) {
-                                            queue.push([newX, newY]);
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
 
                     // Update visual state after all reveals are done
