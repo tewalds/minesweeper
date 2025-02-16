@@ -31,7 +31,8 @@ minesweeper: \
 		src/env.o \
 		src/kdtree.o \
 		src/minesweeper.o \
-		src/point.o
+		src/point.o \
+		src/random.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 minesweeper-client: \
@@ -47,6 +48,8 @@ test: \
 		src/kdtree_test.o \
 		src/point.o \
 		src/point_test.o \
+		src/random.o \
+		src/random_test.o \
 		src/thread_test.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 

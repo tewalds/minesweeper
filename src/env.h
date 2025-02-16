@@ -3,15 +3,14 @@
 
 #include <vector>
 
-#include "absl/random/random.h"
-
 #include "kdtree.h"
 #include "minesweeper.h"
 #include "point.h"
+#include "random.h"
 
 class Env {
  public:
-  Env(Pointi dims, float bomb_percentage);
+  Env(Pointi dims, float bomb_percentage, uint64_t seed);
   std::vector<Update> reset();
   std::vector<Update> step(Action action);
 
@@ -25,5 +24,5 @@ class Env {
   Pointi dims_;
   float bomb_percentage_;
   Array2D<Cell> state_;
-  absl::BitGen bitgen_;
+  Xoshiro256pp bitgen_;
 };

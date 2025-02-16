@@ -3,11 +3,11 @@
 
 #include <cassert>
 
+#include "absl/random/random.h"
 #include "absl/strings/str_format.h"
 
-Env::Env(Pointi dims, float bomb_percentage) :
-    dims_(dims), bomb_percentage_(bomb_percentage),
-    state_(dims) {
+Env::Env(Pointi dims, float bomb_percentage, uint64_t seed) :
+    dims_(dims), bomb_percentage_(bomb_percentage), state_(dims), bitgen_(seed) {
   assert(bomb_percentage > 0. && bomb_percentage < 1.);
 }
 

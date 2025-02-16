@@ -28,6 +28,7 @@ ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(int, aps, 0, "Actions per second");
 ABSL_FLAG(int, port, 9001, "Port to run the websocket server on.");
 ABSL_FLAG(int, agents, 1, "Agents");
+ABSL_FLAG(int, seed, 0, "Random seed for the environment.");
 ABSL_FLAG(bool, benchmark, false, "Exit after the first run");
 
 namespace {
@@ -58,7 +59,7 @@ int main(int argc, char **argv) {
   auto bench_start = std::chrono::steady_clock::now();
   long long bench_actions = 0;
 
-  Env env(dims, absl::GetFlag(FLAGS_mines));
+  Env env(dims, absl::GetFlag(FLAGS_mines), (uint64_t)absl::GetFlag(FLAGS_seed));
   std::vector<Update> updates = env.reset();
 
   std::vector<std::unique_ptr<Agent>> agents;
