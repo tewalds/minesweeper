@@ -508,7 +508,8 @@ const PlayScreen = {
 
             GameState.connection.onUpdate = (state, x, y, userId) => {
                 console.log('🔄 Server update received:', {
-                    state: this.getStateDescription(state),
+                    state,
+                    stateDesc: this.getStateDescription(state),
                     x,
                     y,
                     userId,
@@ -571,10 +572,11 @@ const PlayScreen = {
 
     // Helper to get human-readable state descriptions
     getStateDescription: function (state) {
+        if (state >= 0 && state <= 8) return `REVEALED (${state} mines)`;
         switch (state) {
-            case 0: return 'RESET (0)';
-            case 1: return 'REVEALED (1)';
-            case 2: return 'FLAGGED (2)';
+            case 9: return 'BOMB';
+            case 10: return 'HIDDEN';
+            case 11: return 'MARKED';
             default: return `UNKNOWN (${state})`;
         }
     },
@@ -631,7 +633,8 @@ const PlayScreen = {
     updateCell: function (x, y, state) {
         console.log('🎯 Updating cell:', {
             position: { x, y },
-            state: this.getStateDescription(state),
+            state,
+            stateDesc: this.getStateDescription(state),
             key: `${x},${y}`
         });
 
@@ -644,32 +647,55 @@ const PlayScreen = {
 
         console.log('Cell previous state:', previousState);
 
-        // States from server: HIDDEN = 0, REVEALED = 1, FLAGGED = 2
-        if (state === 1) { // REVEALED
+        // States from server:
+        // 0-8: Revealed cell with N adjacent mines
+        // 9: Revealed mine
+        // 10: Hidden cell
+        // 11: Marked/flagged cell
+        if (state >= 0 && state <= 8) { // Revealed cell with N adjacent mines
+            console.log(`Setting cell ${key} to show ${state} adjacent mines`);
             MinesweeperDB.mines.revealed.add(key);
-            // Update the cell visually
+            MinesweeperDB.mines.markers.delete(key); // Remove any flags
             const cell = this.visibleCells.get(key);
             if (cell) {
-                cell.classList.add('revealed');
-                cell.textContent = '';
-                cell.classList.add('empty');
+                cell.className = 'grid-cell revealed';
+                if (state === 0) {
+                    cell.classList.add('empty');
+                    cell.textContent = '';
+                } else {
+                    cell.classList.add(`adjacent-${state}`);
+                    cell.textContent = state.toString();
+                }
             }
-        } else if (state === 2) { // FLAGGED
-            MinesweeperDB.mines.markers.set(key, {
-                username: GameState.currentUser.username,
-                avatar: '🚩'
-            });
+        } else if (state === 9) { // BOMB
+            console.log(`Setting cell ${key} to show bomb`);
+            MinesweeperDB.mines.revealed.add(key);
+            MinesweeperDB.mines.markers.delete(key);
             const cell = this.visibleCells.get(key);
             if (cell) {
-                cell.textContent = '🚩';
+                cell.className = 'grid-cell revealed mine';
+                cell.textContent = '💣';
             }
-        } else if (state === 0) { // HIDDEN
+        } else if (state === 10) { // HIDDEN
+            console.log(`Setting cell ${key} to hidden`);
             MinesweeperDB.mines.revealed.delete(key);
             MinesweeperDB.mines.markers.delete(key);
             const cell = this.visibleCells.get(key);
             if (cell) {
                 cell.className = 'grid-cell';
                 cell.textContent = '';
+            }
+        } else if (state === 11) { // MARKED
+            console.log(`Setting cell ${key} to marked`);
+            MinesweeperDB.mines.revealed.delete(key);
+            MinesweeperDB.mines.markers.set(key, {
+                username: GameState.currentUser.username,
+                avatar: '🚩'
+            });
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell';
+                cell.textContent = '🚩';
             }
         }
 
@@ -1453,21 +1479,20 @@ const PlayScreen = {
 
             if (MinesweeperDB.mines.revealed.has(key)) {
                 update.classes.push('revealed');
-                if (isServerMode) {
-                    // In server mode, we don't know if it's a mine, just show as revealed
+                // In server mode, we rely on the state sent from server
+                // The state is already set in updateCell, so we just need to preserve it
+                if (cell.classList.contains('empty')) {
                     update.classes.push('empty');
+                } else if (cell.classList.contains('mine')) {
+                    update.classes.push('mine');
+                    update.html = '💣';
                 } else {
-                    // In local mode, we can check if it's a mine
-                    if (MinesweeperDB.isMine(x, y)) {
-                        update.classes.push('mine');
-                        update.html = '💣';
-                    } else {
-                        const count = MinesweeperDB.getAdjacentMines(x, y) || 0;
-                        update.html = count || '';
-                        if (count) {
-                            update.classes.push(`adjacent-${count}`);
-                        } else {
-                            update.classes.push('empty');
+                    // For numbered cells, preserve the number and its class
+                    for (let i = 1; i <= 8; i++) {
+                        if (cell.classList.contains(`adjacent-${i}`)) {
+                            update.classes.push(`adjacent-${i}`);
+                            update.html = i.toString();
+                            break;
                         }
                     }
                 }
@@ -1478,6 +1503,13 @@ const PlayScreen = {
                     update.color = marker.color;
                 }
             }
+
+            console.log(`Updating cell ${key}:`, {
+                classes: update.classes,
+                html: update.html,
+                color: update.color
+            });
+
             updates.push(update);
         }
 
