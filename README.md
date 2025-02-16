@@ -58,3 +58,4 @@ latest versions of python or pygame, and is obviously much slower, and now less 
 - Support reset (Alex)
 - Click on number to auto-solve (Alex)
 - Click to un-flag by default (Timo)
+- Drag-to-scroll (Alex)
