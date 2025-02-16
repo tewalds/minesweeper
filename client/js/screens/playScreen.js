@@ -4,10 +4,10 @@ const PlayScreen = {
     MARKER_UPDATE_INTERVAL: 1000 / 60, // Player marker update interval (~60 FPS)
     MAX_ZOOM: 2.0, // 200% maximum zoom
     MIN_ZOOM_CAP: 0.5, // Never zoom out beyond 50%
-    BASE_MOVE_SPEED: 500, // Pixels per second for movement
+    BASE_MOVE_SPEED: 1000, // Pixels per second for movement
     BASE_ZOOM_SPEED: 0.1, // Base speed for zooming
     EDGE_SCROLL_THRESHOLD: 20, // Pixels from edge to trigger scrolling
-    EDGE_SCROLL_SPEED: 500, // Pixels per second for edge scrolling
+    EDGE_SCROLL_SPEED: 750, // Pixels per second for edge scrolling
     RENDER_MARGIN: 2, // Extra cells to render beyond viewport
     CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
 
@@ -1178,24 +1178,36 @@ const PlayScreen = {
                 return;
             }
 
-            const deltaTime = (timestamp - this.lastMovementTime) / 1000; // Convert to seconds
+            // Cap deltaTime to prevent large jumps (max 32ms = ~30fps)
+            const deltaTime = Math.min((timestamp - this.lastMovementTime) / 1000, 0.032);
             this.lastMovementTime = timestamp;
 
             if (this.pressedKeys.size > 0) {
-                const moveSpeed = this.BASE_MOVE_SPEED * deltaTime * this.zoom; // Multiply by zoom to make it zoom independent
+                // Calculate movement vector
+                let dx = 0;
+                let dy = 0;
 
-                if (this.pressedKeys.has('w') || this.pressedKeys.has('arrowup')) {
-                    this.offsetY += moveSpeed;
+                if (this.pressedKeys.has('w') || this.pressedKeys.has('arrowup')) dy += 1;
+                if (this.pressedKeys.has('s') || this.pressedKeys.has('arrowdown')) dy -= 1;
+                if (this.pressedKeys.has('a') || this.pressedKeys.has('arrowleft')) dx += 1;
+                if (this.pressedKeys.has('d') || this.pressedKeys.has('arrowright')) dx -= 1;
+
+                // Normalize diagonal movement
+                if (dx !== 0 && dy !== 0) {
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    dx /= length;
+                    dy /= length;
                 }
-                if (this.pressedKeys.has('s') || this.pressedKeys.has('arrowdown')) {
-                    this.offsetY -= moveSpeed;
-                }
-                if (this.pressedKeys.has('a') || this.pressedKeys.has('arrowleft')) {
-                    this.offsetX += moveSpeed;
-                }
-                if (this.pressedKeys.has('d') || this.pressedKeys.has('arrowright')) {
-                    this.offsetX -= moveSpeed;
-                }
+
+                // Calculate base speed with zoom compensation
+                const baseSpeed = this.BASE_MOVE_SPEED * deltaTime * this.zoom;
+                // Cap maximum speed per frame (100 pixels)
+                const maxSpeed = 100;
+                const speed = Math.min(baseSpeed, maxSpeed);
+
+                // Apply movement
+                this.offsetX += dx * speed;
+                this.offsetY += dy * speed;
 
                 const container = document.querySelector('.game-container');
                 if (container) {
