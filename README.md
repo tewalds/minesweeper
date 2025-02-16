@@ -42,3 +42,19 @@ make test && ./test
 
 There's a python implementation of the environment and agent as well, but it may not work with the
 latest versions of python or pygame, and is obviously much slower, and now less featureful.
+
+## TODO
+
+### Playtest-ready
+- Accounts (Timo) 
+- Account Screens (Alex)
+- Show other players (Alex)
+- Scoring (Timo)
+- Bots (Timo)
+- Game feel (Alex)
+- Cursors (Timo)
+
+### Other
+- Support reset (Alex)
+- Click on number to auto-solve (Alex)
+- Click to un-flag by default (Timo)
