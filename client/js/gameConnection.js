@@ -124,6 +124,7 @@ class WebSocketGameConnection extends GameConnection {
                 this.ws.onmessage = (event) => {
                     try {
                         const [command, ...args] = event.data.split(' ');
+                        console.log('Received command:', command, 'args:', args);
 
                         switch (command) {
                             case 'grid': {
@@ -134,6 +135,7 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'update': {
                                 const [state, x, y, updateUserId] = args.map(Number);
+                                console.log('Update received:', { state, x, y, updateUserId });
                                 this.onUpdate(state, x, y, updateUserId);
                                 break;
                             }
@@ -165,6 +167,8 @@ class WebSocketGameConnection extends GameConnection {
                     clearTimeout(timeout);
                     this.connected = true;
                     console.log(`Connected to ${this.serverUrl}`);
+                    // Request initial grid state
+                    this.ws.send('grid');
                     resolve(true);
                 };
 
@@ -226,24 +230,43 @@ class WebSocketGameConnection extends GameConnection {
         }, 5000);
 
         try {
+            console.log('Registering player:', name);
             this.ws.send(`register ${name}`);
             await promise;  // Wait for join message
             clearTimeout(timeout);
+            console.log('Player registered successfully');
             return true;
         } catch (error) {
             clearTimeout(timeout);
             this.registrationPromise = null;
+            console.error('Registration failed:', error);
             throw error;
         }
     }
 
     async openCell(x, y) {
         if (!this.connected) throw new Error("Not connected");
-        this.ws.send(`open ${x} ${y}`);
+        return new Promise((resolve, reject) => {
+            try {
+                this.ws.send(`open ${x} ${y}`);
+                // The server will send an 'update' message if successful
+                resolve(true);
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
     async markCell(x, y) {
         if (!this.connected) throw new Error("Not connected");
-        this.ws.send(`mark ${x} ${y}`);
+        return new Promise((resolve, reject) => {
+            try {
+                this.ws.send(`mark ${x} ${y}`);
+                // The server will send an 'update' message if successful
+                resolve(true);
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 } 

@@ -8,7 +8,7 @@ const ConnectionScreen = {
                     <button class="choice-btn server-btn">
                         <i class="fas fa-globe"></i>
                         Connect to Game Server
-                        <small>Local Development (ws://localhost:9001)</small>
+                        <small>Local Development (ws://localhost:9001/minefield)</small>
                     </button>
                     
                     <button class="choice-btn local-btn">

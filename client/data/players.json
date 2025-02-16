@@ -231,6 +231,15 @@
                 "x": 0,
                 "y": 0
             }
+        },
+        "player_asdas": {
+            "username": "asdas",
+            "avatar": "🔋",
+            "color": "#7519FF",
+            "position": {
+                "x": 0,
+                "y": 0
+            }
         }
     }
 }

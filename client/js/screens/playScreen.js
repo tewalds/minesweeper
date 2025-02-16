@@ -29,6 +29,9 @@ const PlayScreen = {
     movementUpdateInterval: null,
     lastMovementUpdate: 0,
 
+    // Track the current view for efficient updates
+    currentView: null,
+
     // Generate a new target position near current position
     generateTargetPosition: function (currentX, currentY) {
         // Pick a random distance (1-5 cells)
@@ -641,29 +644,33 @@ const PlayScreen = {
 
         console.log('Cell previous state:', previousState);
 
-        if (state === 1) { // Revealed
+        // States from server: HIDDEN = 0, REVEALED = 1, FLAGGED = 2
+        if (state === 1) { // REVEALED
             MinesweeperDB.mines.revealed.add(key);
-            console.log('Cell revealed:', {
-                key,
-                totalRevealed: MinesweeperDB.mines.revealed.size
-            });
-        } else if (state === 2) { // Flagged
+            // Update the cell visually
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.classList.add('revealed');
+                cell.textContent = '';
+                cell.classList.add('empty');
+            }
+        } else if (state === 2) { // FLAGGED
             MinesweeperDB.mines.markers.set(key, {
                 username: GameState.currentUser.username,
-                avatar: GameState.currentUser.avatar
+                avatar: '🚩'
             });
-            console.log('Cell flagged:', {
-                key,
-                by: GameState.currentUser.username,
-                totalFlags: MinesweeperDB.mines.markers.size
-            });
-        } else if (state === 0) { // Reset
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.textContent = '🚩';
+            }
+        } else if (state === 0) { // HIDDEN
             MinesweeperDB.mines.revealed.delete(key);
             MinesweeperDB.mines.markers.delete(key);
-            console.log('Cell reset:', {
-                key,
-                previousState
-            });
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell';
+                cell.textContent = '';
+            }
         }
 
         const newState = {
@@ -674,6 +681,7 @@ const PlayScreen = {
 
         console.log('Cell new state:', newState);
 
+        // Force a visual update of all cells
         this.updateVisibleCellStates();
     },
 
@@ -1260,17 +1268,23 @@ const PlayScreen = {
         // Clear any existing interval
         this.stopUpdates();
 
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+
         // Start periodic updates for game state
         this.updateInterval = setInterval(async () => {
             try {
-                await Promise.all([
-                    MockDB.loadPlayers(), // Refresh player data
-                    MinesweeperDB.loadMines() // Refresh mines data
-                ]);
-                // Cache the player data for marker updates
-                this.cachedPlayerData = await MockDB.getOnlinePlayers();
-                // Only update game state here, markers are updated separately
-                await this.renderMinesweeperState();
+                if (!isServerMode) {
+                    // Only load from mock DB in local mode
+                    await Promise.all([
+                        MockDB.loadPlayers(), // Refresh player data
+                        MinesweeperDB.loadMines() // Refresh mines data
+                    ]);
+                    // Cache the player data for marker updates
+                    this.cachedPlayerData = await MockDB.getOnlinePlayers();
+                    // Only update game state here, markers are updated separately
+                    await this.renderMinesweeperState();
+                }
+                // In server mode, updates come through WebSocket events
             } catch (error) {
                 console.error('Error during periodic update:', error);
             }
@@ -1334,12 +1348,23 @@ const PlayScreen = {
         let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN - gridCenterY;
 
         // Clamp to grid boundaries, accounting for centered origin
-        return {
+        const bounds = {
             left: Math.max(-gridCenterX, left),
             top: Math.max(-gridCenterY, top),
             right: Math.min(gridCenterX, right),
             bottom: Math.min(gridCenterY, bottom)
         };
+
+        // Only send view update if it changed
+        if (GameState.connection instanceof WebSocketGameConnection) {
+            const viewStr = `${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
+            if (viewStr !== this.currentView) {
+                this.currentView = viewStr;
+                GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}`);
+            }
+        }
+
+        return bounds;
     },
 
     // Get or create a cell element from the pool
@@ -1419,28 +1444,35 @@ const PlayScreen = {
             return;
         }
 
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
         const updates = [];
 
         for (const [key, cell] of this.visibleCells.entries()) {
             const [x, y] = key.split(',').map(Number);
             const update = { cell, classes: ['grid-cell'], html: '', color: '' };
 
-            if (MinesweeperDB.mines.revealed?.has(key)) {
+            if (MinesweeperDB.mines.revealed.has(key)) {
                 update.classes.push('revealed');
-                if (MinesweeperDB.isMine?.(x, y)) {
-                    update.classes.push('mine');
-                    update.html = '💣';
+                if (isServerMode) {
+                    // In server mode, we don't know if it's a mine, just show as revealed
+                    update.classes.push('empty');
                 } else {
-                    const count = MinesweeperDB.getAdjacentMines?.(x, y) || 0;
-                    update.html = count || '';
-                    if (count) {
-                        update.classes.push(`adjacent-${count}`);
+                    // In local mode, we can check if it's a mine
+                    if (MinesweeperDB.isMine(x, y)) {
+                        update.classes.push('mine');
+                        update.html = '💣';
                     } else {
-                        update.classes.push('empty');
+                        const count = MinesweeperDB.getAdjacentMines(x, y) || 0;
+                        update.html = count || '';
+                        if (count) {
+                            update.classes.push(`adjacent-${count}`);
+                        } else {
+                            update.classes.push('empty');
+                        }
                     }
                 }
             } else {
-                const marker = MinesweeperDB.mines.markers?.get(key);
+                const marker = MinesweeperDB.mines.markers.get(key);
                 if (marker) {
                     update.html = marker.avatar;
                     update.color = marker.color;

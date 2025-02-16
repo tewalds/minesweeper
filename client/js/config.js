@@ -2,12 +2,12 @@
 const Config = {
     SERVER: {
         // Default for local development
-        DEFAULT_URL: 'ws://localhost:9001',
+        DEFAULT_URL: 'ws://localhost:9001/minefield',
 
         // List of known servers
         SERVERS: [
-            { name: 'Local Development', url: 'ws://localhost:9001' },
-            { name: 'Local Network', url: 'ws://localhost:9001' }, // Update this when deploying
+            { name: 'Local Development', url: 'ws://localhost:9001/minefield' },
+            { name: 'Local Network', url: 'ws://localhost:9001/minefield' }, // Update this when deploying
         ],
 
         // Get from localStorage or environment

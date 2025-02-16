@@ -86,9 +86,16 @@ const SpawnScreen = {
                 throw new Error('Missing required player data');
             }
 
-            // Wait for player data to be saved before proceeding
-            await GameState.finalizePlayer(validPos.x, validPos.y);
-            await App.showScreen(App.screens.PLAY);
+            const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+            if (isServerMode) {
+                // In server mode, just register and go straight to play
+                await GameState.connection.registerPlayer(GameState.currentUser.username);
+                await App.showScreen(App.screens.PLAY);
+            } else {
+                // In local mode, save player data and proceed
+                await GameState.finalizePlayer(validPos.x, validPos.y);
+                await App.showScreen(App.screens.PLAY);
+            }
         } catch (error) {
             console.error('Failed to set spawn location:', error);
             alert('Failed to set spawn location. Please try again.');
