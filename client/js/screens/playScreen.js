@@ -4,10 +4,10 @@ const PlayScreen = {
     MARKER_UPDATE_INTERVAL: 1000 / 60, // Player marker update interval (~60 FPS)
     MAX_ZOOM: 2.0, // 200% maximum zoom
     MIN_ZOOM_CAP: 0.5, // Never zoom out beyond 50%
-    BASE_MOVE_SPEED: 20, // Base speed for keyboard movement
+    BASE_MOVE_SPEED: 500, // Pixels per second for movement
     BASE_ZOOM_SPEED: 0.1, // Base speed for zooming
     EDGE_SCROLL_THRESHOLD: 20, // Pixels from edge to trigger scrolling
-    EDGE_SCROLL_SPEED: 15, // Base speed for edge scrolling
+    EDGE_SCROLL_SPEED: 500, // Pixels per second for edge scrolling
     RENDER_MARGIN: 2, // Extra cells to render beyond viewport
     CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
 
@@ -323,6 +323,8 @@ const PlayScreen = {
     visibleCells: new Map(), // Currently visible cells
     cellUpdateQueued: false, // Prevent multiple concurrent updates
     isMouseInWindow: true,
+    lastEdgeScrollTime: null,
+    lastMovementTime: null,
 
     // Calculate minimum zoom to ensure grid fills viewport
     calculateMinZoom: function (containerWidth, containerHeight) {
@@ -852,20 +854,40 @@ const PlayScreen = {
         this.lastY = rect.top + rect.height / 2;
         this.isMouseInWindow = true;
 
-        // Edge scrolling
-        const updateEdgeScroll = () => {
-            if (!this.isMouseInWindow || this.isDragging) return;
+        // Update edge scrolling to be framerate independent
+        const updateEdgeScroll = (timestamp) => {
+            if (!this.lastEdgeScrollTime) {
+                this.lastEdgeScrollTime = timestamp;
+                requestAnimationFrame(updateEdgeScroll);
+                return;
+            }
+
+            const deltaTime = (timestamp - this.lastEdgeScrollTime) / 1000; // Convert to seconds
+            this.lastEdgeScrollTime = timestamp;
+
+            // Skip edge scrolling if keyboard movement is active
+            if (!this.isMouseInWindow || this.pressedKeys.size > 0) {
+                requestAnimationFrame(updateEdgeScroll);
+                return;
+            }
+
+            const container = document.querySelector('.game-container');
+            if (!container) {
+                requestAnimationFrame(updateEdgeScroll);
+                return;
+            }
 
             const rect = container.getBoundingClientRect();
             const mouseX = this.lastX - rect.left;
             const mouseY = this.lastY - rect.top;
 
-            // Only scroll if mouse is within the vertical/horizontal bounds of the container
-            const isInVerticalBounds = mouseY >= 0 && mouseY <= rect.height;
-            const isInHorizontalBounds = mouseX >= 0 && mouseX <= rect.width;
-
             let moved = false;
-            const speed = this.EDGE_SCROLL_SPEED * (1 / this.zoom);
+            const speed = this.EDGE_SCROLL_SPEED * deltaTime * this.zoom; // Multiply by zoom to make it zoom independent
+
+            // Check if mouse is within vertical bounds
+            const isInVerticalBounds = mouseY >= 0 && mouseY <= rect.height;
+            // Check if mouse is within horizontal bounds
+            const isInHorizontalBounds = mouseX >= 0 && mouseX <= rect.width;
 
             if (isInVerticalBounds) {
                 if (mouseX < this.EDGE_SCROLL_THRESHOLD && mouseX >= 0) {
@@ -895,7 +917,7 @@ const PlayScreen = {
             requestAnimationFrame(updateEdgeScroll);
         };
 
-        // Start edge scrolling loop
+        // Start edge scrolling loop with timestamp
         requestAnimationFrame(updateEdgeScroll);
 
         // Track mouse position and window state
@@ -1146,10 +1168,21 @@ const PlayScreen = {
             }
         });
 
-        // Keyboard movement
-        const updateMovement = () => {
+        // Update keyboard movement to be framerate independent
+        const updateMovement = (timestamp) => {
+            if (!this.lastMovementTime) {
+                this.lastMovementTime = timestamp;
+                if (this.pressedKeys.size > 0) {
+                    this.moveAnimationFrame = requestAnimationFrame(updateMovement);
+                }
+                return;
+            }
+
+            const deltaTime = (timestamp - this.lastMovementTime) / 1000; // Convert to seconds
+            this.lastMovementTime = timestamp;
+
             if (this.pressedKeys.size > 0) {
-                const moveSpeed = this.calculateMoveSpeed(this.zoom);
+                const moveSpeed = this.BASE_MOVE_SPEED * deltaTime * this.zoom; // Multiply by zoom to make it zoom independent
 
                 if (this.pressedKeys.has('w') || this.pressedKeys.has('arrowup')) {
                     this.offsetY += moveSpeed;
@@ -1164,10 +1197,12 @@ const PlayScreen = {
                     this.offsetX -= moveSpeed;
                 }
 
-                this.clampOffset(container);
-                this.updateGridTransform();
+                const container = document.querySelector('.game-container');
+                if (container) {
+                    this.clampOffset(container);
+                    this.updateGridTransform();
+                }
 
-                // Continue animation loop only if keys are still pressed
                 this.moveAnimationFrame = requestAnimationFrame(updateMovement);
             }
         };
@@ -1277,12 +1312,6 @@ const PlayScreen = {
         // Slower zooming at higher zoom levels for finer control
         // Faster zooming at lower zoom levels for quick overview changes
         return this.BASE_ZOOM_SPEED * (1 / (currentZoom * 2));
-    },
-
-    // Calculate movement speed based on current zoom level
-    calculateMoveSpeed: function (currentZoom) {
-        // Faster movement when zoomed out, slower when zoomed in
-        return this.BASE_MOVE_SPEED * (1 / currentZoom);
     },
 
     // Calculate visible grid bounds with margin
