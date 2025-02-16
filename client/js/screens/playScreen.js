@@ -642,9 +642,6 @@ const PlayScreen = {
         };
 
         console.log('Cell new state:', newState);
-
-        // Force a visual update of all cells
-        this.updateVisibleCellStates();
     },
 
     createGrid: function () {
@@ -1442,13 +1439,11 @@ const PlayScreen = {
             updates.push(update);
         }
 
-        // Batch apply all updates
-        requestAnimationFrame(() => {
-            updates.forEach(update => {
-                update.cell.className = update.classes.join(' ');
-                update.cell.innerHTML = update.html;
-                update.cell.style.color = update.color;
-            });
+        // Apply all updates directly
+        updates.forEach(update => {
+            update.cell.className = update.classes.join(' ');
+            update.cell.innerHTML = update.html;
+            update.cell.style.color = update.color;
         });
     },
 
