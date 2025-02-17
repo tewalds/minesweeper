@@ -99,6 +99,13 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   // Broadcast updates.
   for (Update u: updates) {
     state_[u.point] = {u.state, u.user};
+    if (auto user = users_.find(u.user); user != users_.end()) {
+      if (u.state < BOMB) {
+        users_[u.user].score += u.state;
+      } else if (u.state == BOMB) {
+        users_[u.user].score -= 100;
+      }
+    }
     for (auto& [_, client] : clients_) {
       if (client.userid > 0 && users_[client.userid].view.contains(u.point)) {
         if (auto s = client.session.lock(); s) {
