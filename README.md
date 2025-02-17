@@ -53,9 +53,12 @@ latest versions of python or pygame, and is obviously much slower, and now less 
 - Bots (Timo)
 - Game feel (Alex)
 - Cursors (Timo)
+- Persistent game state (Timo)
+  - Decide between LMDB, Tkrzw or RocksDB, all of which seem reasonable.
 
 ### Other
 - Support reset (Alex)
-- Click on number to auto-solve (Alex)
+- Click on number to open neighbors if enough are flagged (Alex)
 - Click to un-flag by default (Timo)
 - Drag-to-scroll (Alex)
+- How to deploy (Timo)
