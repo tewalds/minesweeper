@@ -74,10 +74,20 @@ AgentWebSocket::AgentWebSocket(Pointi dims, int port, std::filesystem::path doc_
   server_.listen(port);
   std::cout << "Web server started on http://localhost:" << port << std::endl;
   std::cout << "WebSocket server started on ws://localhost:" << port << "/minefield" << std::endl;
+
+  const int frequency = 1;
+  beauty::repeat(frequency, [this]() {
+    for (auto& [_, client] : clients_) {
+      if (auto s = client.session.lock(); s) {
+        send_users(s, std::chrono::seconds(frequency + 1));  // Give a bit of a buffer
+      }
+    }
+  });
 }
 
 AgentWebSocket::~AgentWebSocket() {
   server_.stop();
+  beauty::stop();  // Stop the repeater
 }
 
 void AgentWebSocket::reset() {
@@ -89,8 +99,8 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   // Broadcast updates.
   for (Update u: updates) {
     state_[u.point] = {u.state, u.user};
-    for (auto& [uuid, client] : clients_) {
-      if (client.view.contains(u.point)) {
+    for (auto& [_, client] : clients_) {
+      if (client.userid > 0 && users_[client.userid].view.contains(u.point)) {
         if (auto s = client.session.lock(); s) {
           send_update(s, u);
         }
@@ -108,7 +118,7 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
 }
 
 void AgentWebSocket::broadcast(const std::string& str) {
-  for (auto& [uuid, client] : clients_) {
+  for (auto& [_, client] : clients_) {
     if (auto s = client.session.lock(); s) {
       s->send(std::string(str));
     }
@@ -134,18 +144,32 @@ int AgentWebSocket::send_rect(const session_ptr& session, Recti r) {
   return sent;
 }
 
+void AgentWebSocket::send_user(const session_ptr& session, const User& u) {
+  auto now = std::chrono::system_clock::now();
+  session->send(absl::StrFormat(
+    "user %d %s %d %d %d %d %d %d %d %d",
+    u.userid, u.name, u.color, u.emoji, u.score, u.view.tl.x, u.view.tl.y, u.view.br.x, u.view.br.y,
+    std::chrono::duration_cast<std::chrono::seconds>(now - u.last_active).count()));
+}
+
+void AgentWebSocket::send_users(const session_ptr& session, std::chrono::duration<float> limit) {
+  auto now = std::chrono::system_clock::now();
+  for (auto& [_, user] : users_) {
+    if (now - user.last_active < limit) {
+      send_user(session, user);
+    }
+  }
+}
+
 void AgentWebSocket::on_connect(const beauty::ws_context& ctx) {
-  std::cout << "Connection opened" << std::endl;
-  int userid = next_userid_++;
+  std::cout << "Connection opened" <<std::endl;
   clients_[ctx.uuid] = ClientInfo{
     .uuid = ctx.uuid,
     .session = ctx.ws_session,
-    .name = "",
-    .userid = userid,
-    .view = Recti(),
+    .userid = 0,
   };
   if (auto s = ctx.ws_session.lock(); s) {
-    s->send(absl::StrFormat("grid %i %i %i", state_.width(), state_.height(), userid));
+    s->send(absl::StrFormat("grid %i %i", state_.width(), state_.height()));
   }
 }
 
@@ -153,46 +177,94 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
   std::istringstream iss(str);
   std::string command;
 
-  // Parse the command
   iss >> command;
+  int userid = clients_[ctx.uuid].userid;
 
-  if (command == "register") {
-    std::string name;
-    iss >> name;
-    clients_[ctx.uuid].name = name;
-    std::cout << absl::StrFormat("New user id: %i, name: %s\n", clients_[ctx.uuid].userid, name);
-    broadcast(absl::StrFormat("join %d %s", clients_[ctx.uuid].userid, name));
-  } else if (command == "open") {
-    int x, y;
-    iss >> x >> y;
-    Pointi p(x, y);
-    if (state_.rect().contains(p)) {
-      int user = clients_[ctx.uuid].userid;
-      actions_.lock()->push({OPEN, p, user});
-    }
-  } else if (command == "mark") {
-    int x, y;
-    iss >> x >> y;
-    Pointi p(x, y);
-    if (state_.rect().contains(p)) {
-      int user = clients_[ctx.uuid].userid;
-      actions_.lock()->push({MARK, p, user});
-    }
-  } else if (command == "view") {
-    int x1, y1, x2, y2;
-    iss >> x1 >> y1 >> x2 >> y2;
-    std::optional<Recti> new_view = state_.rect().intersection({{x1, y1}, {x2, y2}});
-    // TODO: Check that the view isn't too big? How big is too big?
-    if (new_view) {
-      for (Recti r : new_view->difference(clients_[ctx.uuid].view)) {
+  if (userid == 0) {
+    if (command == "register") {
+      std::string name;
+      int color, emoji;
+      iss >> name >> color >> emoji;
+      userid = next_userid_++;
+      name = name.substr(0, 32);
+      clients_[ctx.uuid].userid = userid;
+      users_[userid] = User{
+        .userid = userid,
+        .name = name,
+        .color = color,
+        .emoji = emoji,
+        .score = 0,
+        .view = Recti(),
+        .last_active =  std::chrono::system_clock::now(),
+      };
+      std::cout << absl::StrFormat("New user id: %i, name: %s\n", userid, name);
+    } else if (command == "login") {
+      iss >> userid;
+      // TODO: check a password
+      // TODO: Only allow one connection per user?
+      if (users_.find(userid) != users_.end()) {
+        clients_[ctx.uuid].userid = userid;
+        users_[userid].last_active =  std::chrono::system_clock::now();
+      } else {
         if (auto s = ctx.ws_session.lock(); s) {
-          send_rect(s, r);
+          s->send("error login failed");
         }
+        return;
       }
-      clients_[ctx.uuid].view = *new_view;
+    } else {
+      std::cout << "Invalid command: " << str << "\n";
+      return;
+    }
+    // Broadcast that you joined, including to yourself.
+    for (auto& [_, client] : clients_) {
+      if (auto s = client.session.lock(); s) {
+        send_user(s, users_[userid]);
+      }
+    }
+    if (auto s = ctx.ws_session.lock(); s) {
+      s->send(absl::StrFormat("userid %d", userid));
+      // Send a list of "active" users. Only connected users? Is 7 days too long?
+      // Will send your user again. Oh well.
+      send_users(s, std::chrono::days(7));
     }
   } else {
-    std::cout << "Unknown command: " << command << std::endl;
+    users_[userid].last_active =  std::chrono::system_clock::now();
+    if (command == "open") {
+      int x, y;
+      iss >> x >> y;
+      Pointi p(x, y);
+      if (state_.rect().contains(p)) {
+        int user = clients_[ctx.uuid].userid;
+        actions_.lock()->push({OPEN, p, user});
+      }
+    } else if (command == "mark") {
+      int x, y;
+      iss >> x >> y;
+      Pointi p(x, y);
+      if (state_.rect().contains(p)) {
+        int user = clients_[ctx.uuid].userid;
+        actions_.lock()->push({MARK, p, user});
+      }
+    } else if (command == "view") {
+      int x1, y1, x2, y2, force;
+      iss >> x1 >> y1 >> x2 >> y2 >> force;
+      std::optional<Recti> new_view = state_.rect().intersection({{x1, y1}, {x2, y2}});
+      if (new_view) {
+        users_[userid].view = *new_view;
+        if (auto s = ctx.ws_session.lock(); s) {
+          if (force) {
+            send_rect(s, *new_view);
+          } else {
+            for (Recti r : new_view->difference(users_[userid].view)) {
+              send_rect(s, r);
+            }
+          }
+        }
+      }
+    } else {
+      std::cout << "Invalid command: " << str << "\n";
+      return;
+    }
   }
 }
 

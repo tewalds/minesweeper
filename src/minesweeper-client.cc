@@ -11,6 +11,7 @@
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/random/random.h"
 #include "absl/strings/str_format.h"
 
 #include "agent_sfml.h"
@@ -22,6 +23,7 @@ ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(std::string, host, "localhost", "Websocket host.");
 ABSL_FLAG(int, port, 9001, "Websocket port.");
 ABSL_FLAG(std::string, name, "wsclient", "Username");
+ABSL_FLAG(int, userid, 0, "User to join as. 0 is new user.");
 
 
 struct State {
@@ -44,41 +46,63 @@ int main(int argc, char **argv) {
 
   beauty::client client;
 
-  beauty::ws_handler handler;
-  handler.on_connect = [](const beauty::ws_context& ctx) { };
-  handler.on_receive = [&state](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
-    assert(is_text);
-    std::istringstream iss(std::string(data, size));
-    std::string command;
-    iss >> command;
+  client.ws(uri, beauty::ws_handler{
+      .on_connect = [&client](const beauty::ws_context& ctx) {
+        int userid = absl::GetFlag(FLAGS_userid);
+        std::cout << "Connected\n";
+        if (userid == 0) {
+          absl::BitGen bitgen;
+          std::cout << "Registering user...\n";
+          client.ws_send(absl::StrFormat("register %s %i %i", absl::GetFlag(FLAGS_name),
+          absl::Uniform(bitgen, 0, 100), absl::Uniform(bitgen, 0, 100)));
+        } else {
+          std::cout << "Logging in user...\n";
+          client.ws_send(absl::StrFormat("login %i", userid));
+        }
+      },
+      .on_receive = [&state](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
+        assert(is_text);
+        std::string str(data, size);
+        std::istringstream iss(str);
+        std::string command;
+        iss >> command;
 
-    if (command == "grid") {
-      int x, y, u;
-      iss >> x >> y >> u;
-      std::cout << absl::StrFormat("grid: %ix%i, userid: %i\n", x, y, u);
-      auto s = state.lock();
-      s->dims = Pointi(x, y);
-      s->userid = u;
-    } else if (command == "update") {
-      int c, x, y, user;
-      iss >> c >> x >> y >> user;
-      Update update{CellState(c), {x, y}, user};
-      state.lock()->updates.push_back(update);
-    } else if (command == "join") {
-      int userid;
-      std::string username;
-      iss >> userid >> username;
-      std::cout << absl::StrFormat("User id: %i, name: %s\n", userid, username);
-    } else if (command == "reset") {
-      auto s = state.lock();
-      s->agent->reset();
-      s->updates.clear();
-    }
-  };
-  handler.on_disconnect = [&done](const beauty::ws_context& ctx) { done = true; };
-  handler.on_error = [&done](boost::system::error_code ec, const char* what) { done = true; };
-
-  client.ws(uri, std::move(handler));
+        if (command == "update") {
+          int c, x, y, user;
+          iss >> c >> x >> y >> user;
+          Update update{CellState(c), {x, y}, user};
+          state.lock()->updates.push_back(update);
+        } else if (command == "user") {
+          // TODO: What would we do with this information?
+          // - initialize our view from our own if we just logged in (ie not registered)?
+          // - color marked cells based on the user's color?
+          std::cout << str << std::endl;
+        } else if (command == "grid") {
+          int x, y;
+          iss >> x >> y;
+          std::cout << absl::StrFormat("grid: %ix%i\n", x, y);
+          state.lock()->dims = Pointi(x, y);
+        } else if (command == "userid") {
+          int u;
+          iss >> u;
+          std::cout << absl::StrFormat("userid: %i\n", u);
+          state.lock()->userid = u;
+        } else if (command == "join") {
+          int userid;
+          std::string username;
+          iss >> userid >> username;
+          std::cout << absl::StrFormat("User id: %i, name: %s\n", userid, username);
+        } else if (command == "reset") {
+          auto s = state.lock();
+          s->agent->reset();
+          s->updates.clear();
+        } else {
+          std::cout << "Unknown command: " << str << "\n";
+        }
+      },
+      .on_disconnect = [&done](const beauty::ws_context& ctx) { done = true; },
+      .on_error = [&done](boost::system::error_code ec, const char* what) { done = true; },
+  });
 
   Recti view;
   try {
@@ -108,16 +132,15 @@ int main(int argc, char **argv) {
         // Add a small buffer so you can scroll a bit or zoom out once without latency.
         cur_viewf = Rectf::from_center_size(cur_viewf.center(), cur_viewf.size() * 1.5);
         Recti cur_view = cur_viewf.recti();
+        bool force = (view.area() == 0);
         if (view != cur_view) {
           view = cur_view;
           client.ws_send(absl::StrFormat(
-              "view %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y));
+              "view %i %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y, force));
         }
       } else {
         auto s = state.lock();
-        if (s->userid > 0) {
-          assert(s->dims.x > 0 && s->dims.y > 0);
-          client.ws_send(absl::StrFormat("register %s", absl::GetFlag(FLAGS_name)));
+        if (s->dims.x > 0 && s->dims.y > 0 && s->userid > 0) {
           s->agent = std::make_unique<AgentSFML>(s->dims, s->userid, absl::GetFlag(FLAGS_window));
         }
       }

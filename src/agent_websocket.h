@@ -37,13 +37,25 @@ class AgentWebSocket : public Agent {
   struct ClientInfo {
     std::string uuid;  // related to the websocket session
     std::weak_ptr<beauty::websocket_session> session;
-    std::string name;
     int userid;
-    Recti view;
   };
+
+  struct User {
+    int userid;
+    std::string name;
+    int color;
+    int emoji;
+    int score;
+    Recti view;
+    std::chrono::time_point<std::chrono::system_clock> last_active;
+  };
+
+  void send_user(const session_ptr& session, const User& user);
+  void send_users(const session_ptr& session, std::chrono::duration<float> limit);
 
   beauty::server server_;
   absl::flat_hash_map<std::string, ClientInfo> clients_;  // uuid -> client info
+  absl::flat_hash_map<int, User> users_;  // userid -> User
   int next_userid_;
   MutexProtected<std::queue<Action>> actions_;
 
