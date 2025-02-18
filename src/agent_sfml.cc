@@ -139,27 +139,29 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
     image_.setPixel(u.point.x, u.point.y, COLORS[u.state]);
   }
   if (draw(false)) {
-    // Scroll the view. Check isKeyPressed instead of events below to avoid repeat delay.
-    // Sum/avg view size components to make scroll speed consistent in x/y directions.
-    sf::Vector2f view_size = view_.getSize();
-    float scroll_speed = (view_size.x + view_size.y) / 100.0f;
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || 
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) {
-      view_.move({0, -scroll_speed});
+    if (window_->hasFocus()) {
+      // Scroll the view. Check isKeyPressed instead of events below to avoid repeat delay.
+      // Sum/avg view size components to make scroll speed consistent in x/y directions.
+      sf::Vector2f view_size = view_.getSize();
+      float scroll_speed = (view_size.x + view_size.y) / 100.0f;
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) ||
+          sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) {
+        view_.move({0, -scroll_speed});
+      }
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) ||
+          sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+        view_.move({-scroll_speed, 0});
+      }
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) ||
+          sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) {
+        view_.move({0, scroll_speed});
+      }
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) ||
+          sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
+        view_.move({scroll_speed, 0});
+      }
+      clamp_view();
     }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || 
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
-      view_.move({-scroll_speed, 0});
-    }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || 
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) {
-      view_.move({0, scroll_speed});
-    }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || 
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
-      view_.move({scroll_speed, 0});
-    }
-    clamp_view();
 
     sf::Event event;
     while (window_->pollEvent(event)) {
