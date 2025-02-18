@@ -32,9 +32,10 @@ Action AgentRandom::step(const std::vector<Update>& updates, bool paused) {
         int marked = 0;
         Neighbors neighbors(n, dims_, false);
         for (Pointi nn : neighbors) {
-          if (state_[nn] == HIDDEN) {
+          CellState nns = state_[nn];
+          if (nns == HIDDEN) {
             hidden += 1;
-          } else if (state_[nn] == MARKED) {
+          } else if (nns == MARKED || nns == BOMB) {
             marked += 1;
           }
         }
