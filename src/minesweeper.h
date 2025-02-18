@@ -5,39 +5,40 @@
 
 class Neighbors {
  public:
-  Neighbors(Pointi p, Pointi dims, bool center) : count(0) {
+  Neighbors(Pointi p, Pointi dims, bool center) : count_(0) {
     int xm = p.x - 1;
     int xp = p.x + 1;
     int ym = p.y - 1;
     int yp = p.y + 1;
     if (xm >= 0) {
       if (ym >= 0)
-        neighbors_[count++] = {xm, ym};
-      neighbors_[count++] = {xm, p.y};
+        neighbors_[count_++] = {xm, ym};
+      neighbors_[count_++] = {xm, p.y};
       if (yp < dims.y)
-        neighbors_[count++] = {xm, yp};
+        neighbors_[count_++] = {xm, yp};
     }
     if (ym >= 0)
-      neighbors_[count++] = {p.x, ym};
+      neighbors_[count_++] = {p.x, ym};
     if (center)
-      neighbors_[count++] = {p.x, p.y};
+      neighbors_[count_++] = {p.x, p.y};
     if (yp < dims.y)
-      neighbors_[count++] = {p.x, yp};
+      neighbors_[count_++] = {p.x, yp};
     if (xp < dims.x) {
       if (ym >= 0)
-        neighbors_[count++] = {xp, ym};
-      neighbors_[count++] = {xp, p.y};
+        neighbors_[count_++] = {xp, ym};
+      neighbors_[count_++] = {xp, p.y};
       if (yp < dims.y)
-        neighbors_[count++] = {xp, yp};
+        neighbors_[count_++] = {xp, yp};
     }
   }
 
   Pointi* begin() { return neighbors_; }
-  Pointi* end()   { return neighbors_ + count; }
+  Pointi* end()   { return neighbors_ + count_; }
+  int size() const { return count_; }
 
  private:
   Pointi neighbors_[9];
-  int count;
+  int count_;
 };
 
 
@@ -70,7 +71,7 @@ class Array2D {
 };
 
 
-enum CellState : uint8_t {
+enum CellState : int8_t {
   ZERO = 0,
   ONE = 1,
   TWO = 2,
@@ -91,16 +92,25 @@ class Env;
 
 class Cell {
  public:
-  Cell(bool bomb = false) : state_(HIDDEN), bomb_(bomb), user_(0) {}
+ Cell() {}
 
   CellState state() const { return state_; }
+  int8_t neighbors() const { return neighbors_; }  // Num neighbors.
+  int8_t neighbors_cleared() const { return cleared_; }  // that are opened and not a bomb.
+  int8_t neighbors_marked() const { return marked_; }  // that are marked or a bomb.
+  int8_t neighbors_hidden() const { return neighbors_ - cleared_ - marked_; }  // that are hidden.
   int user() const { return user_; }
 
  private:
+  Cell(int neighbors, bool bomb = false)
+      : state_(HIDDEN), bomb_(bomb), neighbors_(neighbors), cleared_(0), marked_(0), user_(0) {}
   bool bomb() const { return bomb_; }  // The ground truth, only visible to Env.
 
   CellState state_;
-  bool bomb_;
+  bool bomb_ : 1;
+  int neighbors_ : 7;
+  int8_t cleared_;
+  int8_t marked_;
   int user_;
 
   friend Env;
@@ -108,7 +118,7 @@ class Cell {
  static_assert(sizeof(Cell) == 8, "Cell should pack nicely.");
 
 
-enum ActionType : uint8_t {
+enum ActionType : int8_t {
   PASS,
   OPEN, 
   MARK,
