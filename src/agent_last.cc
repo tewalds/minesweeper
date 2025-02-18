@@ -10,45 +10,37 @@
 #include "point.h"
 
 
-AgentLast::AgentLast(Pointi dims, int user)
-    : dims_(dims), user_(user), state_(dims) {
+AgentLast::AgentLast(const Array2D<Cell>& state, int user)
+    : user_(user), state_(state) {
   reset();
 }
 
 void AgentLast::reset() {
-  state_.fill(HIDDEN);
   actions_.clear();
   rolling_action_ = {
       // Encourage it to start heading in a random direction. Forces agents to diverge.
-      absl::Uniform(bitgen_, 0.0f, float(dims_.x)),
-      absl::Uniform(bitgen_, 0.0f, float(dims_.y)),
+      absl::Uniform(bitgen_, 0.0f, float(state_.width())),
+      absl::Uniform(bitgen_, 0.0f, float(state_.height())),
   };
 }
 
 Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
-  // Update state.
   for (auto u : updates) {
-    // std::cout << absl::StrFormat("AgentLast.step: got Update(%i, %i, %i, %i)",
-    //                              u.state, u.point.x, u.point.y, u.user) << std::endl;
-    state_[u.point] = u.state;
     if (u.user == user_) {
       constexpr float decay = 0.05;  // Controls how fast it moves away from the last action.
       rolling_action_.x = rolling_action_.x * (1. - decay) + u.point.x * decay;
       rolling_action_.y = rolling_action_.y * (1. - decay) + u.point.y * decay;
     }
     actions_.remove(u.point);
-  }
 
-  // Compute the resulting valid actions.
-  for (auto u : updates) {
-    for (Pointi n : Neighbors(u.point, dims_, true)) {
-      CellState ns = state_[n];
+    for (Pointi n : Neighbors(u.point, state_.dims(), true)) {
+      CellState ns = state_[n].state();
       if (ns != HIDDEN) {
         int hidden = 0;
         int marked = 0;
-        Neighbors neighbors(n, dims_, false);
+        Neighbors neighbors(n, state_.dims(), false);
         for (Pointi nn : neighbors) {
-          CellState nns = state_[nn];
+          CellState nns = state_[nn].state();
           if (nns == HIDDEN) {
             hidden += 1;
           } else if (nns == MARKED || nns == BOMB) {
@@ -71,7 +63,7 @@ Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
         }
 
         for (Pointi nn : neighbors) {
-          if (state_[nn] == HIDDEN) {
+          if (state_[nn].state() == HIDDEN) {
             actions_.insert({int(act), nn});
           }
         }
@@ -91,7 +83,7 @@ Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
           // Rounding fixes a systematic bias towards the top left from truncating.
           {int(std::round(rolling_action_.x)),
            int(std::round(rolling_action_.y))});
-      if (state_[a.p] == HIDDEN) {
+      if (state_[a.p].state() == HIDDEN) {
         return {ActionType(a.value), a.p, user_};
       } else {
         actions_.remove(a.p);

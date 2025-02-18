@@ -30,7 +30,6 @@ class AgentSFML : public Agent {
 
   Pointi dims_;
   int user_;
-  Array2D<CellState> state_;
 
   std::unique_ptr<sf::RenderWindow> window_;
   sf::View view_;

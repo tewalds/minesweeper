@@ -44,7 +44,7 @@ std::ostream& operator<< (std::ostream& stream, const sf::FloatRect& v) {
 
 
 AgentSFML::AgentSFML(Pointi dims, int user, float window_ratio)
-    : dims_(dims), user_(user), state_(dims), dragging_(false) {
+    : dims_(dims), user_(user), dragging_(false) {
   assert(window_ratio > 0 && window_ratio <= 1);
 
   sf::VideoMode window_size = sf::VideoMode::getDesktopMode();

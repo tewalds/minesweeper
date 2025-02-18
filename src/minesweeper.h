@@ -70,7 +70,7 @@ class Array2D {
 };
 
 
-enum CellState {
+enum CellState : uint8_t {
   ZERO = 0,
   ONE = 1,
   TWO = 2,
@@ -84,8 +84,31 @@ enum CellState {
   HIDDEN = 10,
   MARKED = 11,
 };
+static_assert(sizeof(CellState) == 1, "CellState must be one byte");
 
-enum ActionType {
+
+class Env;
+
+class Cell {
+ public:
+  Cell(bool bomb = false) : state_(HIDDEN), bomb_(bomb), user_(0) {}
+
+  CellState state() const { return state_; }
+  int user() const { return user_; }
+
+ private:
+  bool bomb() const { return bomb_; }  // The ground truth, only visible to Env.
+
+  CellState state_;
+  bool bomb_;
+  int user_;
+
+  friend Env;
+ };
+ static_assert(sizeof(Cell) == 8, "Cell should pack nicely.");
+
+
+enum ActionType : uint8_t {
   PASS,
   OPEN, 
   MARK,

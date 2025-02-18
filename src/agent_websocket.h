@@ -20,7 +20,7 @@ using session_ptr = std::shared_ptr<beauty::websocket_session>;
 
 class AgentWebSocket : public Agent {
  public:
-  AgentWebSocket(Pointi dims, int port, std::filesystem::path doc_root, int first_user);
+  AgentWebSocket(const Array2D<Cell>& state, int port, std::filesystem::path doc_root, int first_user);
   ~AgentWebSocket();
   void reset();
   Action step(const std::vector<Update>& updates, bool paused);
@@ -59,10 +59,5 @@ class AgentWebSocket : public Agent {
   int next_userid_;
   MutexProtected<std::queue<Action>> actions_;
 
-  struct Cell {
-    CellState state;
-    int user;
-  };
-
-  Array2D<Cell> state_;
+  const Array2D<Cell>& state_;
 };

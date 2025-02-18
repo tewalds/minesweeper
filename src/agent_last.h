@@ -13,15 +13,14 @@
 
 class AgentLast : public Agent {
  public:
-  AgentLast(Pointi dims, int user);
+  AgentLast(const Array2D<Cell>& state, int user);
   ~AgentLast() = default;
   void reset();
   Action step(const std::vector<Update>& updates, bool paused);
 
  private:
-  Pointi dims_;
   int user_;
-  Array2D<CellState> state_;
+  const Array2D<Cell>& state_;
   KDTree actions_;
   Pointf rolling_action_;
   absl::BitGen bitgen_;

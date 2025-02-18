@@ -38,8 +38,8 @@ void serve_file(beauty::response& res, const std::filesystem::path& path) {
 }
 
 
-AgentWebSocket::AgentWebSocket(Pointi dims, int port, std::filesystem::path doc_root, int first_user)
-    : clients_(), next_userid_(first_user), state_(dims) {
+AgentWebSocket::AgentWebSocket(const Array2D<Cell>& state, int port, std::filesystem::path doc_root, int first_user)
+    : clients_(), next_userid_(first_user), state_(state) {
   reset();
 
   server_.add_route("/minefield")
@@ -91,14 +91,12 @@ AgentWebSocket::~AgentWebSocket() {
 }
 
 void AgentWebSocket::reset() {
-  state_.fill({HIDDEN, 0});
   broadcast("reset");
 }
 
 Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   // Broadcast updates.
   for (Update u: updates) {
-    state_[u.point] = {u.state, u.user};
     if (auto user = users_.find(u.user); user != users_.end()) {
       if (u.state < BOMB) {
         users_[u.user].score += u.state;
@@ -142,8 +140,8 @@ int AgentWebSocket::send_rect(const session_ptr& session, Recti r) {
   for (int x = r.left(); x < r.right(); x++) {
     for (int y = r.top(); y < r.bottom(); y++) {
       Cell c = state_(x, y);
-      if (c.state != HIDDEN) {
-        send_update(session, {c.state, {x, y}, c.user});
+      if (c.state() != HIDDEN) {
+        send_update(session, {c.state(), {x, y}, c.user()});
         sent++;
       }
     }

@@ -15,9 +15,7 @@ std::vector<Update> Env::reset() {
   // Generate random bombs
   for (int x = 0; x < dims_.x; x++) {
     for (int y = 0; y < dims_.y; y++) {
-      state_(x, y).state = HIDDEN;
-      state_(x, y).bomb = (absl::Uniform(bitgen_, 0.0, 1.0) < bomb_percentage_);
-      state_(x, y).user = 0;
+      state_(x, y) = Cell(absl::Uniform(bitgen_, 0.0, 1.0) < bomb_percentage_);
     }
   }
 
@@ -29,7 +27,7 @@ std::vector<Update> Env::reset() {
 
     int b = 0;
     for (Pointi n : Neighbors(p, dims_, true)) {
-      b += state_[n].bomb;
+      b += state_[n].bomb_;
     }
     if (b == 0) {
       return step(Action{OPEN, p, 0});
@@ -46,46 +44,51 @@ std::vector<Update> Env::step(Action action) {
     Action a = q.back();
     q.pop_back();
     if (a.action == MARK) {
-      if (state_[a.point].state == MARKED) {
-        if (state_[a.point].user == a.user) {
+      if (state_[a.point].state_ == MARKED) {
+        if (state_[a.point].user_ == a.user) {
           // I marked it, so unmark.
-          state_[a.point].state = HIDDEN;
-          state_[a.point].user = 0;
+          state_[a.point].state_ = HIDDEN;
+          state_[a.point].user_ = a.user;
+
           updates.push_back({HIDDEN, a.point, a.user});
         } else {
           // Someone else marked, so replace it with my mark.
-          state_[a.point].user = a.user;
+          state_[a.point].user_ = a.user;
           updates.push_back({MARKED, a.point, a.user});
         }
-      } else if (state_[a.point].state == HIDDEN) {
+      } else if (state_[a.point].state_ == HIDDEN) {
         // Mark it.
-        state_[a.point].state = MARKED;
-        state_[a.point].user = a.user;
+        state_[a.point].state_ = MARKED;
+        state_[a.point].user_ = a.user;
+
         updates.push_back({MARKED, a.point, a.user});
       } else {
         // std::cout << "Invalid mark action, already open\n";
       }
     } else if (a.action == OPEN) {
-      if (state_[a.point].state == HIDDEN) {
-        if (state_[a.point].bomb) {
+      if (state_[a.point].state_ == HIDDEN) {
+        Neighbors neighbors(a.point, dims_, false);
+        if (state_[a.point].bomb_) {
           CellState c = BOMB;
-          state_[a.point].state = c;
+          state_[a.point].state_ = c;
+          state_[a.point].user_ = a.user;
+
           updates.push_back({c, a.point, a.user});
         } else {
-          // Compute and reveal the true value
-          int b = 0;
-          Neighbors neighbors(a.point, dims_, false);
+          // Compute and reveal the true value.
+          uint8_t b = 0;
           for (Pointi n : neighbors) {
-            b += state_[n].bomb;
+            b += state_[n].bomb_;
           }
           CellState c = CellState(b);
-          state_[a.point].state = c;
+          state_[a.point].state_ = c;
+          state_[a.point].user_ = a.user;
           updates.push_back({c, a.point, a.user});
 
           // Propagate to the neighbors.
           if (c == ZERO) {
             for (Pointi n : neighbors) {
-              if (state_[n].state == HIDDEN) {
+              if (state_[n].state_ == HIDDEN) {
                 q.push_back({OPEN, n, 0});
               }
             }

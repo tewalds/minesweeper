@@ -14,13 +14,9 @@ class Env {
   std::vector<Update> reset();
   std::vector<Update> step(Action action);
 
- private:
-  struct Cell {
-    CellState state;
-    bool bomb;
-    int user;
-  };
+  const Array2D<Cell>& state() const { return state_; }
 
+ private:
   Pointi dims_;
   float bomb_percentage_;
   Array2D<Cell> state_;
