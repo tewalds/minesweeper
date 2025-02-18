@@ -5,7 +5,7 @@
 
 class Neighbors {
  public:
-  Neighbors(Pointi p, Pointi dims) : count(0) {
+  Neighbors(Pointi p, Pointi dims, bool center) : count(0) {
     int xm = p.x - 1;
     int xp = p.x + 1;
     int ym = p.y - 1;
@@ -19,7 +19,8 @@ class Neighbors {
     }
     if (ym >= 0)
       neighbors_[count++] = {p.x, ym};
-    neighbors_[count++] = {p.x, p.y};
+    if (center)
+      neighbors_[count++] = {p.x, p.y};
     if (yp < dims.y)
       neighbors_[count++] = {p.x, yp};
     if (xp < dims.x) {

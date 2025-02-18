@@ -41,12 +41,12 @@ Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
 
   // Compute the resulting valid actions.
   for (auto u : updates) {
-    for (Pointi n : Neighbors(u.point, dims_)) {
+    for (Pointi n : Neighbors(u.point, dims_, true)) {
       CellState ns = state_[n];
       if (ns != HIDDEN) {
         int hidden = 0;
         int marked = 0;
-        Neighbors neighbors(n, dims_);
+        Neighbors neighbors(n, dims_, false);
         for (Pointi nn : neighbors) {
           if (state_[nn] == HIDDEN) {
             hidden += 1;

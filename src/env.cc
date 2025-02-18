@@ -28,7 +28,7 @@ std::vector<Update> Env::reset() {
         absl::Uniform(bitgen_, 0, dims_.y));
 
     int b = 0;
-    for (Pointi n : Neighbors(p, dims_)) {
+    for (Pointi n : Neighbors(p, dims_, true)) {
       b += state_[n].bomb;
     }
     if (b == 0) {
@@ -74,7 +74,7 @@ std::vector<Update> Env::step(Action action) {
         } else {
           // Compute and reveal the true value
           int b = 0;
-          Neighbors neighbors(a.point, dims_);
+          Neighbors neighbors(a.point, dims_, false);
           for (Pointi n : neighbors) {
             b += state_[n].bomb;
           }
