@@ -102,6 +102,13 @@ std::vector<Update> Env::step(Action action) {
             }
           }
         }
+      } else if (cell.state_ == cell.neighbors_marked()) {  // Implicitly not marked/bomb or complete.
+        // All bombs are found, assuming no mistaken marks, so open all remaining hidden.
+        for (Pointi n : Neighbors(a.point, dims_, false)) {
+          if (state_[n].state_ == HIDDEN) {
+            q.push_back({OPEN, n, a.user});
+          }
+        }
       }
     }
   }
