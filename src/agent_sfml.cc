@@ -136,7 +136,7 @@ void AgentSFML::clamp_view() {
 Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
   // Update state.
   for (Update u : updates) {
-    image_.setPixel(u.point.x, u.point.y, COLORS[u.state]);
+    image_.setPixel(u.point.x, u.point.y, COLORS[u.state & (SCORE_ZERO - 1)]);
   }
   if (draw(false)) {
     if (window_->hasFocus()) {

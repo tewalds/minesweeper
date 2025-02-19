@@ -97,17 +97,26 @@ void AgentWebSocket::reset() {
 Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
   // Broadcast updates.
   for (Update u: updates) {
+    int score = 0;
     if (auto user = users_.find(u.user); user != users_.end()) {
-      if (u.state < BOMB) {
-        users_[u.user].score += u.state;
+      if (u.state > SCORE_ZERO) {
+        int count = u.state & (SCORE_ZERO - 1);
+        score = count * count;
+        users_[u.user].score += score;
       } else if (u.state == BOMB) {
-        users_[u.user].score -= 100;
+        score = -std::max(100, users_[u.user].score);
+        users_[u.user].score += score;
       }
     }
     for (auto& [_, client] : clients_) {
       if (client.userid > 0 && users_[client.userid].view.contains(u.point)) {
         if (auto s = client.session.lock(); s) {
           send_update(s, u);
+        }
+      }
+      if (score > 0 && client.userid == u.user) {
+        if (auto s = client.session.lock(); s) {
+          s->send(absl::StrFormat("score %d %d %d", score, u.point.x, u.point.y));
         }
       }
     }
@@ -131,7 +140,7 @@ void AgentWebSocket::broadcast(const std::string& str) {
 }
 
 void AgentWebSocket::send_update(const session_ptr& session, Update u) {
-  session->send(absl::StrFormat("update %d %d %d %d", u.state, u.point.x, u.point.y, u.user));
+  session->send(absl::StrFormat("update %d %d %d %d", u.state & (SCORE_ZERO - 1), u.point.x, u.point.y, u.user));
 }
 
 int AgentWebSocket::send_rect(const session_ptr& session, Recti r) {

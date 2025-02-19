@@ -26,6 +26,10 @@ void AgentLast::reset() {
 
 Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
   for (auto u : updates) {
+    if (u.state >= SCORE_ZERO) {
+      continue;  // All neighbors are cleared, so nothing left to do.
+    }
+
     if (u.user == user_) {
       constexpr float decay = 0.05;  // Controls how fast it moves away from the last action.
       rolling_action_.x = rolling_action_.x * (1. - decay) + u.point.x * decay;
@@ -38,9 +42,9 @@ Action AgentLast::step(const std::vector<Update>& updates, bool paused) {
       if (nc.state() != HIDDEN && nc.neighbors_hidden() > 0) {
         ActionType act = PASS;
         if (nc.state() == nc.neighbors_marked()) {
-          // All bombs are found.
+          // All bombs are found, assuming no mistaken marks.
           act = OPEN;
-        } else if (nc.state() == nc.neighbors() - nc.neighbors_cleared()) {
+        } else if (nc.complete()) {
           // All remaining hidden must be bombs
           act = MARK;
         } else {

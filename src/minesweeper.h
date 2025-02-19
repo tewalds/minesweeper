@@ -84,6 +84,16 @@ enum CellState : int8_t {
   BOMB = 9,
   HIDDEN = 10,
   MARKED = 11,
+
+  SCORE_ZERO = 16,
+  SCORE_ONE = 17,
+  SCORE_TWO = 18,
+  SCORE_THREE = 19,
+  SCORE_FOUR = 20,
+  SCORE_FIVE = 21,
+  SCORE_SIX = 22,
+  SCORE_SEVEN = 23,
+  SCORE_EIGHT = 24,
 };
 static_assert(sizeof(CellState) == 1, "CellState must be one byte");
 
@@ -99,6 +109,7 @@ class Cell {
   int8_t neighbors_cleared() const { return cleared_; }  // that are opened and not a bomb.
   int8_t neighbors_marked() const { return marked_; }  // that are marked or a bomb.
   int8_t neighbors_hidden() const { return neighbors_ - cleared_ - marked_; }  // that are hidden.
+  bool complete() const { return neighbors_ == cleared_ + (state_ & (SCORE_ZERO - 1)); }  // All hidden can be marked.
   int user() const { return user_; }
 
  private:
