@@ -62,6 +62,12 @@ run: all
 run_test: test
 	./test
 
+benchmark: minesweeper
+	echo "\033[0;32mBenchmarking... \033[1;33m Expect hidden <= 15898\033[0m"
+	./minesweeper --size 240 --benchmark=true --window 0 --port 0 --seed 43
+	./minesweeper --size 240 --benchmark=true --window 0 --port 0 --seed 43
+	./minesweeper --size 240 --benchmark=true --window 0 --port 0 --seed 43
+
 clean:
 	rm -f \
 		*/*.o \

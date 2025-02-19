@@ -123,8 +123,18 @@ int main(int argc, char **argv) {
 
   auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::steady_clock::now() - bench_start).count();
-  std::cout << "Actions: " << bench_actions
-            << " action/s: " << bench_actions * 1000000 / duration_us << std::endl;
+  std::cout << absl::StrFormat("Actions: %d, actions/s: %d\n", bench_actions, bench_actions * 1000000 / duration_us);
+
+  int hidden = 0;
+  int total = dims.x * dims.y;
+  for (int x = 0; x < dims.x; ++x) {
+    for (int y = 0; y < dims.y; ++y) {
+      if (env.state()(x, y).state() == HIDDEN) {
+        hidden++;
+      }
+    }
+  }
+  std::cout << absl::StrFormat("Hidden: %d / %d = %.6f%%\n", hidden, total, hidden * 100.0 / total);
 
   return 0;
 }
