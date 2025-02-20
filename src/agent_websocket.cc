@@ -209,7 +209,8 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
         .emoji = emoji,
         .score = 0,
         .view = Recti(),
-        .last_active =  std::chrono::system_clock::now(),
+        .mouse = Pointf(),
+        .last_active = std::chrono::system_clock::now(),
       };
       std::cout << absl::StrFormat("New user id: %i, name: %s\n", userid, name);
     } else if (command == "login") {
@@ -271,6 +272,22 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
           } else {
             for (Recti r : new_view->difference(users_[userid].view)) {
               send_rect(s, r);
+            }
+          }
+        }
+      }
+    } else if (command == "mouse") {
+      float x, y;
+      iss >> x >> y;
+      users_[userid].mouse = {x, y};
+      Pointi mouse(x, y);
+      auto time_limit = std::chrono::system_clock::now() - std::chrono::seconds(60);
+      for (auto& [_, client] : clients_) {
+        if (client.userid > 0 && client.userid != userid) {
+          const User& user = users_[client.userid];
+          if (user.view.contains(mouse) && user.last_active > time_limit) {
+            if (auto s = client.session.lock(); s) {
+              s->send(absl::StrFormat("mouse %d %.1f %.1f", userid, x, y));
             }
           }
         }

@@ -47,6 +47,7 @@ class AgentWebSocket : public Agent {
     int emoji;
     int score;
     Recti view;
+    Pointf mouse;
     std::chrono::time_point<std::chrono::system_clock> last_active;
   };
 

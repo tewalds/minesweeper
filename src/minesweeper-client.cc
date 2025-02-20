@@ -72,6 +72,8 @@ int main(int argc, char **argv) {
           iss >> c >> x >> y >> user;
           Update update{CellState(c), {x, y}, user};
           state.lock()->updates.push_back(update);
+        } else if (command == "mouse") {
+          // TODO: Render the other player's mouse positions?
         } else if (command == "user") {
           // TODO: What would we do with this information?
           // - initialize our view from our own if we just logged in (ie not registered)?
@@ -105,16 +107,19 @@ int main(int argc, char **argv) {
   });
 
   Recti view;
+  Pointf mouse;
   try {
     while (!done) {
       if (state.lock()->agent) {
         Action action;
         Rectf cur_viewf;
+        Pointf cur_mouse;
         {
           auto s = state.lock();
           action = s->agent->step(s->updates, false);
           s->updates.clear();
           cur_viewf = s->agent->get_view();
+          cur_mouse = s->agent->get_mouse();
         }
 
         if (action.action == OPEN) {
@@ -137,6 +142,13 @@ int main(int argc, char **argv) {
           view = cur_view;
           client.ws_send(absl::StrFormat(
               "view %i %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y, force));
+        }
+
+        if (cur_mouse != Pointf() && cur_mouse.distance(mouse) > 0.2) {
+          // TODO: Should the limit be relative to view size, so you don't send too often
+          // if you're zoomed out? or maybe not at all if you're too zoomed out?
+          mouse = cur_mouse;
+          client.ws_send(absl::StrFormat("mouse %.1f %.1f", mouse.x, mouse.y));
         }
       } else {
         auto s = state.lock();

@@ -23,6 +23,7 @@ class AgentSFML : public Agent {
   Action step(const std::vector<Update>& updates, bool paused);
 
   Rectf get_view() const;
+  Pointf get_mouse() const;
 
  private:
   bool draw(bool force);

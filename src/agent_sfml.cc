@@ -73,6 +73,15 @@ Rectf AgentSFML::get_view() const {
   return Rectf::from_center_size({center.x, center.y}, {size.x, size.y});
 }
 
+Pointf AgentSFML::get_mouse() const {
+  if (window_->hasFocus()) {
+    sf::Vector2f mouse_pos = window_->mapPixelToCoords(sf::Mouse::getPosition(*window_), view_);
+    return Pointf(mouse_pos.x, mouse_pos.y);
+  } else {
+    return Pointf(0, 0);
+  }
+}
+
 void AgentSFML::reset() {
   while (!actions_.empty()) {
     actions_.pop();

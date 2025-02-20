@@ -25,6 +25,8 @@ struct Pointi {
   Pointi operator-(int   v) const { return Pointi(x - v, y - v); };
   Pointi operator*(int   v) const { return Pointi(x * v, y * v); };
   Pointi operator*(float v) const { return Pointi(x * v, y * v); };
+
+  float distance(const Pointi& o) const { return std::sqrt((x - o.x) * (x - o.x) + (y - o.y) * (y - o.y)); }
 };
 
 std::ostream& operator<< (std::ostream& stream, const Pointi& p);
@@ -46,6 +48,8 @@ struct Pointf {
   Pointf operator-(float v) const { return Pointf(x - v, y - v); }
   Pointf operator*(float v) const { return Pointf(x * v, y * v); }
   Pointf operator/(float v) const { return Pointf(x / v, y / v); }
+
+  float distance(const Pointf& o) const { return std::sqrt((x - o.x) * (x - o.x) + (y - o.y) * (y - o.y)); }
 };
 
 std::ostream& operator<< (std::ostream& stream, const Pointf& p);
