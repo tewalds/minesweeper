@@ -15,7 +15,7 @@ class AgentRandom : public Agent {
   AgentRandom(const Array2D<Cell>& state, int user);
   ~AgentRandom() = default;
   void reset();
-  Action step(const std::vector<Update>& updates, bool paused);
+  Action step(const std::vector<Update>& updates, bool paused = false);
 
  private:
   int user_;

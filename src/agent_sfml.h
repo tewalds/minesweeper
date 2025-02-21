@@ -20,7 +20,7 @@ class AgentSFML : public Agent {
   AgentSFML(Pointi dims, int user, float window_ratio);
   ~AgentSFML() = default;
   void reset();
-  Action step(const std::vector<Update>& updates, bool paused);
+  Action step(const std::vector<Update>& updates, bool paused = false);
 
   Rectf get_view() const;
   Pointf get_mouse() const;
