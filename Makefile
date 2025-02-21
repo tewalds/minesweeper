@@ -20,7 +20,7 @@ LDLIBS += $$(pkg-config absl_flat_hash_map --libs)
 LDLIBS += $$(pkg-config absl_random_random --libs)
 LDLIBS += $$(pkg-config absl_strings --libs)
 
-all: minesweeper minesweeper-client
+all: minesweeper minesweeper-client test
 
 minesweeper: \
 		beauty/libeauty.a \
@@ -63,11 +63,14 @@ run: all
 	./minesweeper
 
 run_test: test
+	./test --skip-benchmarks
+
+run_benchmark: test
 	./test
 
 # Useful for finding flaky tests.
 run_test_repeat: test
-	for _ in $$(seq 1 100); do ./test || exit 1; done
+	for _ in $$(seq 1 100); do ./test --skip-benchmarks || exit 1; done
 
 benchmark: minesweeper
 	echo "\033[0;32mBenchmarking... \033[1;33m Expect hidden <= 15898\033[0m"
