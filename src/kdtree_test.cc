@@ -3,6 +3,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/random/random.h"
+#include "absl/strings/str_format.h"
 
 #include "catch2/catch_amalgamated.h"
 #include "kdtree.h"
@@ -105,9 +106,10 @@ TEST_CASE("KDtree", "[kdtree]") {
 
 TEST_CASE("KDTree Benchmark", "[kdtree]") {
   const int num_points = 10000;
-  const Pointi dims = {1000, 1000};
+  const Pointi dims = {4000, 4000};
 
   std::vector<KDTree::Value> values;
+  values.reserve(num_points);
   Xoshiro256pp bitgen(Catch::getSeed());
 
   auto gen_point = [&bitgen, dims]() {
@@ -124,11 +126,16 @@ TEST_CASE("KDTree Benchmark", "[kdtree]") {
     }
   }
 
-  BENCHMARK("insert") {
+  BENCHMARK(absl::StrFormat("insert %d points", num_points)) {
     KDTree tree;
     for (KDTree::Value v : values) {
       tree.insert(v);
     }
+  };
+
+  BENCHMARK_ADVANCED("iterate into vector")(Catch::Benchmark::Chronometer meter) {
+    KDTree tree(values);
+    meter.measure([&tree](int i) { return std::vector(tree.begin(), tree.end()); });
   };
 
   BENCHMARK_ADVANCED("find")(Catch::Benchmark::Chronometer meter) {
@@ -141,6 +148,16 @@ TEST_CASE("KDTree Benchmark", "[kdtree]") {
     KDTree tree(values);
     tree.rebalance();
     meter.measure([&tree, &gen_point](int i) { return tree.find_closest(gen_point()); });
+  };
+
+  BENCHMARK_ADVANCED("insert + pop_closest")(Catch::Benchmark::Chronometer meter) {
+    KDTree tree(values);
+    tree.rebalance();
+    meter.measure([&tree, &gen_point](int i) {
+      tree.insert({i, gen_point()});
+      return tree.pop_closest(gen_point());
+    });
+    REQUIRE(tree.size() > num_points * 0.9);  // If this fails, insert is getting many collisions.
   };
 
   BENCHMARK_ADVANCED("rebalance")(Catch::Benchmark::Chronometer meter) {
