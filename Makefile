@@ -44,6 +44,9 @@ minesweeper-client: \
 
 test: \
 		catch2/catch_amalgamated.o \
+		src/agent_random.o \
+		src/env.o \
+		src/env_test.o \
 		src/kdtree.o \
 		src/kdtree_test.o \
 		src/point.o \

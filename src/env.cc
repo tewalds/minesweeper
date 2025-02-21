@@ -6,6 +6,10 @@
 #include "absl/random/random.h"
 #include "absl/strings/str_format.h"
 
+#include "ansi-colors.h"
+#include "minesweeper.h"
+#include "point.h"
+
 Env::Env(Pointi dims, float bomb_percentage, uint64_t seed) :
     dims_(dims), bomb_percentage_(bomb_percentage), state_(dims), bitgen_(seed) {
   assert(bomb_percentage > 0. && bomb_percentage < 1.);
@@ -94,9 +98,15 @@ std::vector<Update> Env::step(Action action) {
               updates.push_back({nc.state_, n, a.user});
             }
           }
-          cell.state_ = CellState(cell.complete() ? (b | SCORE_ZERO) : b);
+          cell.state_ = CellState(b);
           cell.user_ = a.user;
           updates.push_back({cell.state_, a.point, a.user});
+
+          if (cell.complete()) {
+            // Don't merge open and score updates, as they may be treated differently by the agent.
+            cell.state_ = CellState(cell.state_ | SCORE_ZERO);
+            updates.push_back({cell.state_, a.point, a.user});
+          }
 
           // Propagate to the neighbors.
           if (b == 0) {
@@ -118,4 +128,67 @@ std::vector<Update> Env::step(Action action) {
     }
   }
   return updates;
+}
+
+
+std::ostream& operator<< (std::ostream& stream, const Array2D<Cell>& state) {
+  using namespace rang;
+
+  stream << fgB::blue << " ";
+  for (int x = 0; x < state.width(); ++x) {
+    stream << " " << (x % 10);
+  }
+  stream << style::reset << "\n";
+  for (int y = 0; y < state.height(); ++y) {
+    stream << fgB::blue << (y % 10) << style::reset << " ";
+    for (int x = 0; x < state.width(); ++x) {
+      CellState c = state(x, y).state();
+      switch (c) {
+        case ZERO:
+          stream << fg::green << "-" << style::reset;
+          break;
+        case ONE:
+        case TWO:
+        case THREE:
+        case FOUR:
+        case FIVE:
+        case SIX:
+        case SEVEN:
+        case EIGHT:
+          stream << fg::green << int(c) << style::reset;
+          break;
+
+        case BOMB:
+          stream << fgB::red << "*" << style::reset;
+          break;
+
+        case HIDDEN:
+          stream << fgB::yellow << "#" << style::reset;
+          break;
+
+        case MARKED:
+          stream << fgB::blue << "@" << style::reset;
+          break;
+
+        case SCORE_ZERO:
+          stream << "-";
+          break;
+        case SCORE_ONE:
+        case SCORE_TWO:
+        case SCORE_THREE:
+        case SCORE_FOUR:
+        case SCORE_FIVE:
+        case SCORE_SIX:
+        case SCORE_SEVEN:
+        case SCORE_EIGHT:
+          stream << int(c & ~SCORE_ZERO);
+          break;
+      }
+      if (x < state.width() - 1) {
+        stream << " ";
+      }
+    }
+    stream << "\n";
+  }
+  return stream;
 }
