@@ -19,6 +19,12 @@ std::ostream& operator<< (std::ostream& stream, const KDTree::Value& v) {
 
 KDTree::KDTree() : root(nullptr), count(0), sum_depth(0) {}
 
+KDTree::KDTree(const std::vector<Value>& values) : KDTree() {
+  for (const auto& v : values) {
+    insert(v);
+  }
+}
+
 bool KDTree::empty() const {
   return root == nullptr;
 }

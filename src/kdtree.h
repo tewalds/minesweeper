@@ -10,11 +10,12 @@
 
 class KDTree {
  public:
-  KDTree();
-
   struct Value {
     int value;
     Pointi p;
+
+    Value() = default;
+    Value(int v, Pointi p) : value(v), p(p) {}
 
     bool operator==(const Value& o) const = default;
     bool operator!=(const Value& o) const = default;
@@ -51,6 +52,9 @@ class KDTree {
     std::vector<const Node*> stack;
   };
   typedef const Iterator const_iterator;
+
+  KDTree();
+  KDTree(const std::vector<Value>& values);
 
   bool empty() const;
   int size() const;

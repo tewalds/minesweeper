@@ -7,12 +7,13 @@
 #include "catch2/catch_amalgamated.h"
 #include "kdtree.h"
 #include "point.h"
+#include "random.h"
 
 
 TEST_CASE("KDtree", "[kdtree]") {
   KDTree tree;
   std::vector<Pointi> points;
-  absl::BitGen bitgen;
+  Xoshiro256pp bitgen(Catch::getSeed());
 
   for (int i = 0; i < 50; i++) {
     Pointi p(absl::Uniform(bitgen, 0, 10), absl::Uniform(bitgen, 0, 10));
@@ -100,4 +101,50 @@ TEST_CASE("KDtree", "[kdtree]") {
       REQUIRE(tree.validate());
     }
   }
+}
+
+TEST_CASE("KDTree Benchmark", "[kdtree]") {
+  const int num_points = 10000;
+  const Pointi dims = {1000, 1000};
+
+  std::vector<KDTree::Value> values;
+  Xoshiro256pp bitgen(Catch::getSeed());
+
+  auto gen_point = [&bitgen, dims]() {
+    return Pointi(absl::Uniform(bitgen, 0, dims.x), absl::Uniform(bitgen, 0, dims.y));
+  };
+
+  {  // Generate `points`.
+    KDTree tree;
+    while (values.size() < num_points) {
+      KDTree::Value v(int(values.size()), gen_point());
+      if (tree.insert(v)) {
+        values.push_back(v);
+      }
+    }
+  }
+
+  BENCHMARK("insert") {
+    KDTree tree;
+    for (KDTree::Value v : values) {
+      tree.insert(v);
+    }
+  };
+
+  BENCHMARK_ADVANCED("find")(Catch::Benchmark::Chronometer meter) {
+    KDTree tree(values);
+    tree.rebalance();
+    meter.measure([&tree, &gen_point](int i) { return tree.find(gen_point()); });
+  };
+
+  BENCHMARK_ADVANCED("find_closest")(Catch::Benchmark::Chronometer meter) {
+    KDTree tree(values);
+    tree.rebalance();
+    meter.measure([&tree, &gen_point](int i) { return tree.find_closest(gen_point()); });
+  };
+
+  BENCHMARK_ADVANCED("rebalance")(Catch::Benchmark::Chronometer meter) {
+    KDTree tree(values);
+    meter.measure([&tree](int i) { tree.rebalance(); return tree.depth_avg(); });
+  };
 }
