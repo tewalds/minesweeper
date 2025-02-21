@@ -71,7 +71,7 @@ class KDTree {
   Value pop_closest(Pointi p);
 
   void print_tree(std::ostream& stream = std::cout) const;
-  bool validate() const;
+  void validate() const;  // Implemented and used in kdtree_test.cc, not allowed elsewhere.
 
   void rebalance();
   std::string balance_str() const;

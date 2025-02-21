@@ -272,41 +272,6 @@ void KDTree::print_tree(std::ostream& stream, const Node* node, std::string pref
   print_tree(stream, node->children[1].get(), prefix, false);
 }
 
-bool KDTree::validate() const {
-  int min = std::numeric_limits<int>::min();
-  int max = std::numeric_limits<int>::max();
-  validate(root.get(), 0, Pointi(min, min), Pointi(max, max));
-  return true;
-}
-void KDTree::validate(const Node* node, int depth, Pointi min, Pointi max) const {
-  if (!node) {
-    return;
-  }
-   
-  // Assert instead of return false so that gdb will give a backtrace.
-  assert(node->depth == depth);
-  assert(node->value.p.x >= min.x);
-  assert(node->value.p.y >= min.y);
-  assert(node->value.p.x < max.x);
-  assert(node->value.p.y < max.y);
-
-  if (depth % 2 == 0) {
-    validate(
-        node->children[0].get(), depth + 1,
-        Pointi(min.x, min.y), Pointi(node->value.p.x, max.y));
-    validate(
-        node->children[1].get(), depth + 1,
-        Pointi(node->value.p.x, min.y), Pointi(max.x, max.y));
-  } else {
-    validate(
-        node->children[0].get(), depth + 1,
-        Pointi(min.x, min.y), Pointi(max.x, node->value.p.y));
-    validate(
-        node->children[1].get(), depth + 1,
-        Pointi(min.x, node->value.p.y), Pointi(max.x, max.y));
-  }
-}
-
 void KDTree::collect_values(std::unique_ptr<Node> &node, std::vector<Value> &values) {
   if (!node) {
     return;

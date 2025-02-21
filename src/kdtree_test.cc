@@ -11,6 +11,41 @@
 #include "random.h"
 
 
+void KDTree::validate() const {
+  int min = std::numeric_limits<int>::min();
+  int max = std::numeric_limits<int>::max();
+  validate(root.get(), 0, Pointi(min, min), Pointi(max, max));
+}
+
+void KDTree::validate(const Node* node, int depth, Pointi min, Pointi max) const {
+  if (!node) {
+    return;
+  }
+
+  REQUIRE(node->depth == depth);
+  REQUIRE(node->value.p.x >= min.x);
+  REQUIRE(node->value.p.y >= min.y);
+  REQUIRE(node->value.p.x < max.x);
+  REQUIRE(node->value.p.y < max.y);
+
+  if (depth % 2 == 0) {
+    validate(
+        node->children[0].get(), depth + 1,
+        Pointi(min.x, min.y), Pointi(node->value.p.x, max.y));
+    validate(
+        node->children[1].get(), depth + 1,
+        Pointi(node->value.p.x, min.y), Pointi(max.x, max.y));
+  } else {
+    validate(
+        node->children[0].get(), depth + 1,
+        Pointi(min.x, min.y), Pointi(max.x, node->value.p.y));
+    validate(
+        node->children[1].get(), depth + 1,
+        Pointi(min.x, node->value.p.y), Pointi(max.x, max.y));
+  }
+}
+
+
 TEST_CASE("KDtree", "[kdtree]") {
   KDTree tree;
   std::vector<Pointi> points;
@@ -34,7 +69,7 @@ TEST_CASE("KDtree", "[kdtree]") {
     }
 
     REQUIRE(inserted == missing);
-    REQUIRE(tree.validate());
+    tree.validate();
   }
 
   INFO("Tree: \n" << tree);
@@ -55,7 +90,7 @@ TEST_CASE("KDtree", "[kdtree]") {
     INFO("Before: " << tree.balance_str() << tree);
     tree.rebalance();
     INFO("After:  " << tree.balance_str() << tree);
-    REQUIRE(tree.validate());
+    tree.validate();
   }
 
   SECTION("Find/exists works") {
@@ -89,7 +124,7 @@ TEST_CASE("KDtree", "[kdtree]") {
         REQUIRE(exists == tree.remove({x, y}));
         REQUIRE(size - exists == tree.size());
         INFO("after\n" << tree);
-        REQUIRE(tree.validate());
+        tree.validate();
       }
     }
     REQUIRE(tree.empty());
@@ -99,7 +134,7 @@ TEST_CASE("KDtree", "[kdtree]") {
     REQUIRE(tree.size() == points.size());
     while (!tree.empty()) {
       tree.pop_closest({3, 4});
-      REQUIRE(tree.validate());
+      tree.validate();
     }
   }
 }
