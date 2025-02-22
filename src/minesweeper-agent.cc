@@ -35,6 +35,29 @@ struct State {
   int userid = 0;
 };
 
+class PingPong {
+ public:
+  PingPong& send(beauty::client& client) {
+    sent++;
+    client.ws_send(absl::StrFormat("ping %d", sent));
+    return *this;  // for chaining
+  }
+  void receive(int i) {
+    received++;
+    assert(received == i);
+    cv.notify_all();
+  }
+  void wait() {
+    std::unique_lock<std::mutex> lk(mutex);
+    cv.wait(lk, [this]{ return received < sent; });
+  }
+ private:
+  int sent = 0;
+  int received = 0;
+  std::mutex mutex;
+  std::condition_variable cv;
+};
+
 
 int main(int argc, char **argv) {
   absl::SetProgramUsageMessage("Minesweeper agent, connect to a server.\n");
@@ -46,6 +69,7 @@ int main(int argc, char **argv) {
   auto sleep = std::chrono::microseconds(int(1000000.0 * absl::GetFlag(FLAGS_sleep)));
 
   bool done = false;
+  PingPong ping_pong;
   MutexProtected<State> state;
 
   beauty::client client;
@@ -64,7 +88,7 @@ int main(int argc, char **argv) {
           client.ws_send(absl::StrFormat("login %i", userid));
         }
       },
-      .on_receive = [&state](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
+      .on_receive = [&state, &ping_pong](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
         assert(is_text);
         std::string str(data, size);
         std::istringstream iss(str);
@@ -100,6 +124,10 @@ int main(int argc, char **argv) {
           s->env->reset();
           s->agent->reset();
           s->updates.clear();
+        } else if (command == "pong") {
+          int i;
+          iss >> i;
+          ping_pong.receive(i);
         } else {
           std::cout << "Unknown command: " << str << "\n";
         }
@@ -134,12 +162,15 @@ int main(int argc, char **argv) {
         } else if (action.action == QUIT) {
           done = true;
         }
+        ping_pong.send(client).wait();
       } else {
         auto s = state.lock();
         if (s->dims.x > 0 && s->dims.y > 0 && s->userid > 0) {
           s->env = std::make_unique<FakeEnv>(s->dims);
           s->agent = std::make_unique<AgentLast>(s->env->state(), s->userid);
           client.ws_send(absl::StrFormat("view 0 0 %i %i 1", s->dims.x, s->dims.y));
+          ping_pong.send(client).wait();
+          std::cout << "Loaded field\n";
         }
       }
 

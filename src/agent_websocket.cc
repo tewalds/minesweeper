@@ -194,6 +194,18 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
   iss >> command;
   int userid = clients_[ctx.uuid].userid;
 
+  if (command == "ping") {
+    // Useful for testing latency. Most messages are async events that may result in an arbitrary
+    // number of responses, from none to millions, or not be a response at all. This one is
+    // guaranteed to be sent back immediately with a single response. Unfortunately it's not that
+    // useful for synchronization, as an action sent before this can lead to updates sent after
+    // this response. It at least lets you wait for some of the send/receive buffers to clear.
+    if (auto s = ctx.ws_session.lock(); s) {
+      s->send(absl::StrFormat("pong%s", str.substr(4)));
+    }
+    return;
+  }
+
   if (userid == 0) {
     if (command == "register") {
       std::string name;
