@@ -109,7 +109,7 @@ Action AgentWebSocket::step(const std::vector<Update>& updates, bool paused) {
       }
     }
     for (auto& [_, client] : clients_) {
-      if (client.userid > 0 && users_[client.userid].view.contains(u.point)) {
+      if (client.userid > 0 && u.state < SCORE_ZERO && users_[client.userid].view.contains(u.point)) {
         if (auto s = client.session.lock(); s) {
           send_update(s, u);
         }

@@ -14,20 +14,22 @@
 #include "absl/random/random.h"
 #include "absl/strings/str_format.h"
 
-#include "agent_sfml.h"
+#include "agent_last.h"
+#include "env.h"
 #include "minesweeper.h"
 #include "point.h"
 #include "thread.h"
 
-ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(std::string, host, "localhost", "Websocket host.");
 ABSL_FLAG(int, port, 9001, "Websocket port.");
-ABSL_FLAG(std::string, name, "wsclient", "Username");
+ABSL_FLAG(std::string, name, "wsagent", "Username");
 ABSL_FLAG(int, userid, 0, "User to join as. 0 is new user.");
+ABSL_FLAG(float, sleep, 0.001, "How long to sleep (in seconds) between actions.");
 
 
 struct State {
-  std::unique_ptr<AgentSFML> agent;
+  std::unique_ptr<Agent> agent;
+  std::unique_ptr<FakeEnv> env;
   std::vector<Update> updates;
   Pointi dims;
   int userid = 0;
@@ -35,11 +37,13 @@ struct State {
 
 
 int main(int argc, char **argv) {
-  absl::SetProgramUsageMessage("Minesweeper client, connect to a server and play minesweeper.\n");
+  absl::SetProgramUsageMessage("Minesweeper agent, connect to a server.\n");
   absl::ParseCommandLine(argc, argv);
 
   std::string uri = absl::StrFormat("ws://%s:%i/minefield", absl::GetFlag(FLAGS_host), absl::GetFlag(FLAGS_port));
   std::cout << "Connecting to: " << uri << std::endl;
+
+  auto sleep = std::chrono::microseconds(int(1000000.0 * absl::GetFlag(FLAGS_sleep)));
 
   bool done = false;
   MutexProtected<State> state;
@@ -73,13 +77,8 @@ int main(int argc, char **argv) {
           Update update{CellState(c), {x, y}, user};
           state.lock()->updates.push_back(update);
         } else if (command == "mouse") {
-          // TODO: Render the other player's mouse positions?
         } else if (command == "score") {
-          // TODO: Render score events?
         } else if (command == "user") {
-          // TODO: What would we do with this information?
-          // - initialize our view from our own if we just logged in (ie not registered)?
-          // - color marked cells based on the user's color?
           std::cout << str << std::endl;
         } else if (command == "grid") {
           int x, y;
@@ -98,6 +97,7 @@ int main(int argc, char **argv) {
           std::cout << absl::StrFormat("User id: %i, name: %s\n", userid, username);
         } else if (command == "reset") {
           auto s = state.lock();
+          s->env->reset();
           s->agent->reset();
           s->updates.clear();
         } else {
@@ -114,20 +114,15 @@ int main(int argc, char **argv) {
       },
   });
 
-  Recti view;
-  Pointf mouse;
   try {
     while (!done) {
       if (state.lock()->agent) {
         Action action;
-        Rectf cur_viewf;
-        Pointf cur_mouse;
         {
           auto s = state.lock();
+          s->env->step(s->updates);  // Update the state for the agent.
           action = s->agent->step(s->updates, false);
           s->updates.clear();
-          cur_viewf = s->agent->get_view();
-          cur_mouse = s->agent->get_mouse();
         }
 
         if (action.action == OPEN) {
@@ -138,34 +133,17 @@ int main(int argc, char **argv) {
           // ignore
         } else if (action.action == QUIT) {
           done = true;
-        } else {
-          std::cout << "Dropping action: " << action.action << std::endl;
-        }
-
-        // Add a small buffer so you can scroll a bit or zoom out once without latency.
-        cur_viewf = Rectf::from_center_size(cur_viewf.center(), cur_viewf.size() * 1.5);
-        Recti cur_view = cur_viewf.recti();
-        bool force = (view.area() == 0);
-        if (view != cur_view) {
-          view = cur_view;
-          client.ws_send(absl::StrFormat(
-              "view %i %i %i %i %i", view.tl.x, view.tl.y, view.br.x, view.br.y, force));
-        }
-
-        if (cur_mouse != Pointf() && cur_mouse.distance(mouse) > 0.2) {
-          // TODO: Should the limit be relative to view size, so you don't send too often
-          // if you're zoomed out? or maybe not at all if you're too zoomed out?
-          mouse = cur_mouse;
-          client.ws_send(absl::StrFormat("mouse %.1f %.1f", mouse.x, mouse.y));
         }
       } else {
         auto s = state.lock();
         if (s->dims.x > 0 && s->dims.y > 0 && s->userid > 0) {
-          s->agent = std::make_unique<AgentSFML>(s->dims, s->userid, absl::GetFlag(FLAGS_window));
+          s->env = std::make_unique<FakeEnv>(s->dims);
+          s->agent = std::make_unique<AgentLast>(s->env->state(), s->userid);
+          client.ws_send(absl::StrFormat("view 0 0 %i %i 1", s->dims.x, s->dims.y));
         }
       }
 
-      std::this_thread::sleep_for(std::chrono::microseconds(1000000/60));
+      std::this_thread::sleep_for(sleep);
     }
   } catch(const std::exception& ex) {
     std::cout << "exception: " << ex.what() << std::endl;

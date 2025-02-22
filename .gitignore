@@ -103,6 +103,7 @@ ENV/
 
 *.o
 minesweeper
+minesweeper-agent
 minesweeper-client
 test
 .vscode
