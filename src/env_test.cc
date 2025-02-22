@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 
+#include "src/agent_last.h"
 #include "src/agent_random.h"
 #include "src/env.h"
 #include "src/minesweeper.h"
@@ -125,6 +126,22 @@ TEST_CASE("env", "[env]") {
       env.validate();
     }
   }
+}
+
+TEMPLATE_TEST_CASE("env benchmark", "[env]", AgentRandom, AgentLast) {
+  BENCHMARK("solve known state") {
+    Pointi dims(120, 60);  // Small enough to be printed in a high resolution console.
+    Env env(dims, 0.15, 42);  // Pass a constant random seed.
+    TestType agent(env.state(), 1);
+    std::vector<Update> updates = env.reset();
+    while (true) {
+      Action action = agent.step(updates);
+      if (action.action == PASS) {
+        break;
+      }
+      updates = env.step(action);
+    }
+  };
 }
 
 void check_equal(const Array2D<Cell>& a, const Array2D<Cell>& b) {

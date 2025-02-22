@@ -56,6 +56,7 @@ minesweeper-agent: \
 
 test: \
 		catch2/catch_amalgamated.o \
+		src/agent_last.o \
 		src/agent_random.o \
 		src/env.o \
 		src/env_test.o \
