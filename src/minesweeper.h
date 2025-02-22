@@ -99,17 +99,23 @@ static_assert(sizeof(CellState) == 1, "CellState must be one byte");
 
 
 class Env;
+class FakeEnv;
 
 class Cell {
  public:
- Cell() {}
+
+ // This constructor is only useful for initializing a vector of Cells. All must be replaced by Env.
+  Cell() : state_(ZERO), bomb_(false), neighbors_(0), cleared_(0), marked_(0), user_(0) {}
 
   CellState state() const { return state_; }
   int8_t neighbors() const { return neighbors_; }  // Num neighbors.
   int8_t neighbors_cleared() const { return cleared_; }  // that are opened and not a bomb.
   int8_t neighbors_marked() const { return marked_; }  // that are marked or a bomb.
   int8_t neighbors_hidden() const { return neighbors_ - cleared_ - marked_; }  // that are hidden.
-  bool complete() const { return neighbors_ == cleared_ + (state_ & (SCORE_ZERO - 1)); }  // All hidden can be marked.
+  bool complete() const {  // All hidden can be marked. Doesn't make sense on bombs/hidden/marked.
+    int count = state_ & ~SCORE_ZERO;
+    return count <= EIGHT && neighbors_ == cleared_ + count;
+  }
   int user() const { return user_; }
 
  private:
@@ -125,13 +131,14 @@ class Cell {
   int user_;
 
   friend Env;
+  friend FakeEnv;
  };
  static_assert(sizeof(Cell) == 8, "Cell should pack nicely.");
 
 
 enum ActionType : int8_t {
   PASS,
-  OPEN, 
+  OPEN,
   MARK,
 
   RESET,

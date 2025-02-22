@@ -131,7 +131,74 @@ std::vector<Update> Env::step(Action action) {
 }
 
 
-std::ostream& operator<< (std::ostream& stream, const Array2D<Cell>& state) {
+FakeEnv::FakeEnv(Pointi dims) : dims_(dims), state_(dims) {
+  reset();
+}
+
+void FakeEnv::reset() {
+  for (int x = 0; x < dims_.x; x++) {
+    for (int y = 0; y < dims_.y; y++) {
+      state_(x, y) = Cell(Neighbors({x, y}, dims_, false).size(), false);
+    }
+  }
+}
+
+void FakeEnv::step(std::vector<Update> updates) {
+  for (Update u : updates) {
+    Cell& cell = state_[u.point];
+    Neighbors neighbors(u.point, dims_, false);
+
+    cell.user_ = u.user;
+
+    if (u.state == HIDDEN) {
+      if (cell.state_ == MARKED) {
+        // Must have unmarked the cell.
+        cell.state_ = HIDDEN;
+        for (Pointi n : neighbors) {
+          state_[n].marked_ -= 1;
+        }
+      }
+    } else if (u.state == MARKED) {
+      if (cell.state_ == HIDDEN) {
+        cell.state_ = MARKED;
+        for (Pointi n : neighbors) {
+          state_[n].marked_ += 1;
+        }
+      } else if (cell.state_ == MARKED) {
+        // Someone replaced the mark.
+      }
+    } else if (u.state == BOMB) {
+      if (cell.state_ == HIDDEN) {
+        cell.state_ = BOMB;
+        for (Pointi n : neighbors) {
+          state_[n].marked_ += 1;  // Treat as if it's marked, even though it can't be unmarked.
+        }
+      }
+    } else if (u.state <= EIGHT) {
+      if (cell.state_ != MARKED) {
+        for (Pointi n : neighbors) {
+          Cell& nc = state_[n];
+          nc.cleared_ += 1;
+          if (nc.complete()) {
+            nc.state_ = CellState(nc.state_ | SCORE_ZERO);
+          }
+        }
+        cell.state_ = u.state;
+        if (cell.complete()) {
+          cell.state_ = CellState(cell.state_ | SCORE_ZERO);
+        }
+      }
+    } else if (u.state >= SCORE_ZERO) {
+      // Are SCORE_ variants sent over the wire? They can be ignored.
+    } else {
+      // std::cout << "Invalid update? " << int(u.state) << ", point: " << u.point << "\n";
+      assert(false);
+    }
+  }
+}
+
+
+std::ostream& operator<<(std::ostream& stream, const Array2D<Cell>& state) {
   using namespace rang;
 
   stream << fgB::blue << " ";

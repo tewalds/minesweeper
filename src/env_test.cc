@@ -1,6 +1,10 @@
 
 #include "catch2/catch_amalgamated.h"
 
+#include <array>
+#include <iostream>
+#include <vector>
+
 #include "src/agent_random.h"
 #include "src/env.h"
 #include "src/minesweeper.h"
@@ -120,5 +124,61 @@ TEST_CASE("env", "[env]") {
 
       env.validate();
     }
+  }
+}
+
+void check_equal(const Array2D<Cell>& a, const Array2D<Cell>& b) {
+  REQUIRE(a.dims() == b.dims());
+  for (int x = 0; x < a.width(); ++x) {
+    for (int y = 0; y < a.height(); ++y) {
+      CAPTURE(x, y);
+      REQUIRE(a(x, y).state() == b(x, y).state());
+      REQUIRE(a(x, y).neighbors() == b(x, y).neighbors());
+      REQUIRE(a(x, y).neighbors_cleared() == b(x, y).neighbors_cleared());
+      REQUIRE(a(x, y).neighbors_marked() == b(x, y).neighbors_marked());
+      REQUIRE(a(x, y).neighbors_hidden() == b(x, y).neighbors_hidden());
+      REQUIRE(a(x, y).complete() == b(x, y).complete());
+      REQUIRE(a(x, y).user() == b(x, y).user());
+    }
+  }
+}
+
+TEST_CASE("fake env", "[env]") {
+  Pointi dims(35, 20);
+  Env env(dims, 0.1, Catch::getSeed());
+  FakeEnv fake_env(dims);
+
+  std::array<AgentRandom, 2> agents{  // Make sure the user is set correctly too.
+      AgentRandom(env.state(), 1),
+      AgentRandom(env.state(), 2),
+  };
+
+  std::vector<Update> updates = env.reset();
+  fake_env.step(updates);
+
+  check_equal(env.state(), fake_env.state());
+
+  std::vector<Action> actions;
+  bool done = false;
+  while (!done) {
+    done = true;
+
+    for (auto &agent : agents) {
+      Action action = agent.step(updates);
+      if (action.action != PASS) {
+        done = false;
+        actions.push_back(action);
+      }
+    }
+    updates.clear();
+
+    for (auto action : actions) {
+      for (Update u : env.step(action)) {
+        updates.push_back(u);
+      }
+    }
+    fake_env.step(updates);
+
+    check_equal(env.state(), fake_env.state());
   }
 }
