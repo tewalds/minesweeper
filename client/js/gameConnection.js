@@ -13,28 +13,6 @@ class GameConnection {
         this.onError = (error) => { };
     }
 
-    async testConnection() {
-        return new Promise((resolve, reject) => {
-            const ws = new WebSocket(this.serverUrl);
-
-            const timeout = setTimeout(() => {
-                ws.close();
-                reject(new Error("Connection timed out after 5 seconds"));
-            }, 5000);
-
-            ws.onopen = () => {
-                clearTimeout(timeout);
-                ws.close();
-                resolve(true);
-            };
-
-            ws.onerror = (error) => {
-                clearTimeout(timeout);
-                reject(new Error(`Connection failed. Make sure the server is running at ${this.serverUrl}`));
-            };
-        });
-    }
-
     async connect() {
         try {
             this.ws = new WebSocket(this.serverUrl);
