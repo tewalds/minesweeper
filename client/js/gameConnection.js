@@ -31,6 +31,12 @@ class WebSocketGameConnection extends GameConnection {
         this.registrationPromise = null;  // Track registration completion
         this.loginPromise = null;  // Track login completion
         this.gridInfo = null;  // Store grid info
+        this.onUpdate = (state, x, y, userId) => {
+            // Add debug logging
+            console.log('Received cell update from server:', { state, x, y, userId });
+            // Forward update to PlayScreen
+            PlayScreen.processServerUpdate({ x, y, state });
+        };
     }
 
     async testConnection() {
@@ -68,7 +74,6 @@ class WebSocketGameConnection extends GameConnection {
                 this.ws.onmessage = (event) => {
                     try {
                         const [command, ...args] = event.data.split(' ');
-                        console.log('Received WebSocket message:', { command, args });
 
                         switch (command) {
                             case 'grid': {
@@ -79,18 +84,14 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'update': {
                                 const [state, x, y, userId] = args.map(Number);
-                                console.log('Received cell update:', { state, x, y, userId });
+                                // Add more detailed logging
+                                console.log('Raw server message:', event.data);
+                                console.log('Parsed update:', { command, state, x, y, userId });
                                 this.onUpdate(state, x, y, userId);
                                 break;
                             }
                             case 'user': {
                                 const [userId, name, colorIndex, avatarIndex, score, viewX1, viewY1, viewX2, viewY2] = args;
-                                console.log('Processing user data:', {
-                                    userId: parseInt(userId),
-                                    name,
-                                    colorIndex: parseInt(colorIndex),
-                                    avatarIndex: parseInt(avatarIndex)
-                                });
                                 const userData = {
                                     userId: parseInt(userId),
                                     name,
@@ -105,7 +106,6 @@ class WebSocketGameConnection extends GameConnection {
                                     }
                                 };
 
-                                // If this is our user data, resolve registration/login
                                 if (userData.userId === this.userId) {
                                     if (this.registrationPromise) {
                                         this.registrationPromise.resolve(userData);
@@ -119,7 +119,6 @@ class WebSocketGameConnection extends GameConnection {
                                 } else {
                                     GameState.updatePlayer(userData);
                                 }
-
                                 break;
                             }
                             case 'userid': {
@@ -143,6 +142,7 @@ class WebSocketGameConnection extends GameConnection {
                         }
                     } catch (error) {
                         console.error('Error processing message:', error);
+                        console.error('Raw message:', event.data);
                         this.onError(new Error(`Failed to process server message: ${error.message}`));
                     }
                 };

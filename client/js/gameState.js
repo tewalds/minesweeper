@@ -114,15 +114,12 @@ const GameState = {
 
     // Update user data from server
     updateFromServer: function (userData) {
-        console.log('Updating user data from server:', userData);
         this.currentUser.userId = userData.userId;
         this.currentUser.username = userData.name;
 
-        // Store both indices and actual values
         this.currentUser.colorIndex = userData.color;
         this.currentUser.avatarIndex = userData.avatar;
 
-        // Convert indices to actual values if they're valid
         if (userData.color >= 0 && userData.color < this.colors.length) {
             this.currentUser.color = this.colors[userData.color];
         } else {
@@ -137,9 +134,7 @@ const GameState = {
 
         this.currentUser.score = userData.score;
         this.currentUser.view = userData.view;
-        console.log('Updated current user:', this.currentUser);
 
-        // Update players map with converted values
         this.players.set(userData.userId, {
             ...userData,
             color: this.currentUser.color,
@@ -148,7 +143,6 @@ const GameState = {
         });
         this.emit('playersUpdated');
 
-        // Save userid for future logins
         GameStorage.save(GameStorage.USERID_KEY, userData.userId);
     },
 

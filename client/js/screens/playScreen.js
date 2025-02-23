@@ -46,27 +46,22 @@ const PlayScreen = {
         this.revealed.clear();
         this.markers.clear();
 
-        // Set up WebSocket event handlers
-        GameState.connection.ws.addEventListener('message', (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'cell_update') {
-                    this.updateCellState(data.x, data.y, data.state);
-                } else if (data.type === 'batch_update') {
-                    this.processBatchUpdates(data.updates);
-                } else if (data.type === 'player_update') {
-                    this.updatePlayerState(data);
-                }
-            } catch (error) {
-                console.error('Error processing WebSocket message:', error);
-            }
-        });
+        // Set up WebSocket handlers
+        if (GameState.connection instanceof WebSocketGameConnection) {
+            console.log('Setting up WebSocket handlers');
 
-        // Request initial view
-        const viewSize = 20; // View radius
-        const x = GameState.currentUser.x || 0;
-        const y = GameState.currentUser.y || 0;
-        GameState.connection.ws.send(`view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize}`);
+            GameState.connection.onUpdate = (state, x, y, userId) => {
+                console.log('Received update from server:', { state, x, y, userId });
+                this.processServerUpdate({ x, y, state });
+            };
+
+            // Request initial view with explicit coordinates
+            const viewSize = 20; // View radius
+            const x = GameState.currentUser.x || 0;
+            const y = GameState.currentUser.y || 0;
+            console.log('Requesting initial view:', `view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize}`);
+            GameState.connection.ws.send(`view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize}`);
+        }
     },
 
     // Update player state
@@ -97,6 +92,9 @@ const PlayScreen = {
     updateCell: function (x, y, state) {
         const key = `${x},${y}`;
 
+        // Add debug logging
+        console.log(`Updating cell ${key} to state ${state}`);
+
         // States from server:
         // 0-8: Revealed cell with N adjacent mines
         // 9: Revealed mine
@@ -107,6 +105,7 @@ const PlayScreen = {
             this.markers.delete(key); // Remove any flags
             const cell = this.visibleCells.get(key);
             if (cell) {
+                console.log(`Found visible cell for ${key}, updating to revealed state ${state}`);
                 cell.className = 'grid-cell revealed';
                 if (state === 0) {
                     cell.classList.add('empty');
@@ -115,6 +114,9 @@ const PlayScreen = {
                     cell.classList.add(`adjacent-${state}`);
                     cell.textContent = state.toString();
                 }
+                // Verify update
+                console.log(`Cell ${key} classes:`, cell.className);
+                console.log(`Cell ${key} content:`, cell.textContent);
             }
         } else if (state === 9) { // BOMB
             this.revealed.add(key);
@@ -151,7 +153,7 @@ const PlayScreen = {
         if (!updates || !Array.isArray(updates)) return;
 
         updates.forEach(update => {
-            this.updateCellState(update.x, update.y, update.state);
+            this.updateCell(update.x, update.y, update.state);
         });
 
         // Update visible cells
@@ -1198,6 +1200,8 @@ const PlayScreen = {
             const viewStr = `${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
             if (viewStr !== this.currentView) {
                 this.currentView = viewStr;
+                // Add debug logging
+                console.log('Sending view update:', `view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}`);
                 GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}`);
             }
         }
@@ -1232,6 +1236,10 @@ const PlayScreen = {
         const bounds = this.getVisibleBounds(container);
         if (!bounds) return;
 
+        // Add debug logging
+        console.log('Updating visible cells with bounds:', bounds);
+        console.log('Current revealed cells:', Array.from(this.revealed));
+
         // Track cells to remove
         const cellsToRemove = new Set(this.visibleCells.keys());
 
@@ -1260,7 +1268,7 @@ const PlayScreen = {
         // Remove out-of-view cells
         for (const key of cellsToRemove) {
             const cell = this.visibleCells.get(key);
-            cell.remove();
+            this.recycleCellElement(cell);
             this.visibleCells.delete(key);
             updatesNeeded = true;
         }
@@ -1278,10 +1286,16 @@ const PlayScreen = {
 
     // Update the states of visible cells
     updateVisibleCellStates: function () {
+        // Add debug logging
+        console.log('Updating visible cell states');
+        console.log('Revealed cells:', Array.from(this.revealed));
+        console.log('Visible cells:', Array.from(this.visibleCells.keys()));
+
         for (const [key, cell] of this.visibleCells.entries()) {
             if (this.revealed.has(key)) {
                 // Preserve existing state for revealed cells
                 // The state is already set in updateCell
+                console.log(`Cell ${key} is revealed`);
                 continue;
             }
 
@@ -1459,23 +1473,28 @@ const PlayScreen = {
     processServerUpdate: function (update) {
         if (!update) return;
 
-        const key = `${update.x},${update.y}`;
-        console.log('Processing server update:', {
-            x: update.x,
-            y: update.y,
-            originalState: update.state,
-            normalizedState: update.state % 13,
-            key
-        });
+        // Add debug logging
+        console.log('Processing server update:', update);
 
-        // Update local state
+        const key = `${update.x},${update.y}`;
+
+        // Store the state before updating
+        const oldState = this.revealed.has(key);
+
+        // Update the cell
         this.updateCell(update.x, update.y, update.state);
 
-        // Update visible cells
-        const grid = document.querySelector('.game-grid');
-        const container = document.querySelector('.game-container');
-        if (grid && container) {
-            this.updateVisibleCells(container, grid);
+        // Log state change
+        console.log(`Cell ${key} state change: ${oldState} -> ${this.revealed.has(key)}`);
+
+        // Force a visual update only if state changed
+        if (oldState !== this.revealed.has(key)) {
+            const grid = document.querySelector('.game-grid');
+            const container = document.querySelector('.game-container');
+            if (grid && container) {
+                this.updateVisibleCells(container, grid);
+                this.updateVisibleCellStates();
+            }
         }
     }
 }; 
