@@ -1,7 +1,9 @@
 const LoginScreen = {
+    USERNAME_KEY: 'minesweeper_username',
+
     show: function (container) {
         // Load previous username if exists
-        const savedUsername = GameStorage.load(GameStorage.USERNAME_KEY);
+        const savedUsername = localStorage.getItem(this.USERNAME_KEY);
 
         const html = `
             <div class="login-screen">
@@ -33,7 +35,7 @@ const LoginScreen = {
 
             try {
                 // Save username
-                GameStorage.save(GameStorage.USERNAME_KEY, username);
+                localStorage.setItem(this.USERNAME_KEY, username);
                 GameState.currentUser.username = username;
 
                 try {

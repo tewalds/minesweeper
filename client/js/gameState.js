@@ -108,11 +108,7 @@ const GameState = {
         this.emit('playersUpdated');
     },
 
-    init: async function () {
-        // Load saved user data
-        this.currentUser.username = GameStorage.load(GameStorage.USERNAME_KEY);
-        this.currentUser.userId = GameStorage.load(GameStorage.USERID_KEY);
-    },
+    init: async function () { },
 
     // Update user data from server
     updateFromServer: function (userData) {
@@ -143,8 +139,6 @@ const GameState = {
             avatar: this.currentUser.avatar,
         });
         this.emit('playersUpdated');
-
-        GameStorage.save(GameStorage.USERID_KEY, userData.userId);
     },
 
     // Update other player data

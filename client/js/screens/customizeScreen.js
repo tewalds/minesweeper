@@ -108,9 +108,6 @@ const CustomizeScreen = {
                 view: null
             };
 
-            // Clear saved user ID
-            GameStorage.save(GameStorage.USERID_KEY, null);
-
             // Return to connection screen
             App.showScreen(App.screens.CONNECTION);
         });
