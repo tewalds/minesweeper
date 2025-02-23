@@ -131,6 +131,18 @@ class WebSocketGameConnection extends GameConnection {
                                 this.onReset();
                                 break;
                             }
+                            case 'score': {
+                                const [score, x, y] = args.map(Number);
+                                // Update the user's score in GameState
+                                if (this.userId) {
+                                    const userData = {
+                                        ...GameState.currentUser,
+                                        score: (GameState.currentUser.score || 0) + score
+                                    };
+                                    GameState.updateFromServer(userData);
+                                }
+                                break;
+                            }
                             default:
                                 console.warn(`Unknown command received: ${command}`);
                         }
