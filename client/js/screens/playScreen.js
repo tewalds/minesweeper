@@ -193,31 +193,6 @@ const PlayScreen = {
         this.playerMovements.set(player.username, state);
     },
 
-    // Update visual state immediately for a player action
-    updateVisualState: function (x, y, username, avatar, action) {
-        const key = `${x},${y}`;
-
-        // Optimistically update the visual state
-        if (action === 'flag') {
-            // Find userId from username
-            let userId = null;
-            for (const [id, userData] of GameState.players.entries()) {
-                if (userData.name === username) {
-                    userId = id;
-                    break;
-                }
-            }
-            this.markers.set(key, { userId });
-        } else if (action === 'unflag') {
-            this.markers.delete(key);
-        } else if (action === 'reveal') {
-            this.revealed.add(key);
-        }
-
-        // Force an immediate visual update
-        this.updateVisibleCellStates();
-    },
-
     // Simulate a player click at a position
     simulatePlayerClick: async function (x, y, username, avatar) {
         if (this.isRegeneratingGrid) return;
@@ -237,13 +212,11 @@ const PlayScreen = {
 
             if (marker?.userId === userId) {
                 // Remove own flag
-                this.updateVisualState(x, y, username, avatar, 'unflag');
-                await GameState.connection.markCell(x, y);
+                await GameState.connection.unmarkCell(x, y);
             } else if (!marker) {
                 // Only reveal if cell isn't flagged
                 if (!this.revealed.has(`${x},${y}`)) {
                     await GameState.connection.openCell(x, y);
-                    this.updateVisibleCells();
                 }
             }
         } catch (error) {
@@ -836,27 +809,18 @@ const PlayScreen = {
 
             const x = parseInt(cell.dataset.x);
             const y = parseInt(cell.dataset.y);
-            const key = `${x},${y}`;
 
-            console.log('🖱️ Left click on cell:', { x, y, key });
-
-            // Check if cell has any flag
-            const marker = this.markers.get(key);
-            if (marker) {
-                console.log('Cell has flag, ignoring click:', marker);
-                return;
-            }
+            console.log('🖱️ Left click on cell:', { x, y });
 
             try {
                 console.log('Sending open command to server:', { x, y });
-                const response = await GameState.connection.openCell(x, y);
-                console.log('Server response to open:', response);
+                await GameState.connection.openCell(x, y);
             } catch (error) {
                 console.error('Failed to process cell click:', error);
             }
         };
 
-        // Cell right click handling for flags
+        // Cell right click handling
         const handleCellRightClick = async (e) => {
             e.preventDefault();
 
@@ -876,12 +840,17 @@ const PlayScreen = {
             const y = parseInt(cell.dataset.y);
             const key = `${x},${y}`;
 
-            console.log('🖱️ Right click on cell:', { x, y, key });
+            console.log('🖱️ Right click on cell:', { x, y });
 
             try {
-                console.log('Sending mark command to server:', { x, y });
-                const response = await GameState.connection.markCell(x, y);
-                console.log('Server response to mark:', response);
+                // If cell has any flag, unmark it, otherwise mark it
+                if (this.markers.has(key)) {
+                    console.log('Sending unmark command to server:', { x, y });
+                    await GameState.connection.unmarkCell(x, y);
+                } else {
+                    console.log('Sending mark command to server:', { x, y });
+                    await GameState.connection.markCell(x, y);
+                }
             } catch (error) {
                 console.error('Failed to process right click:', error);
             }

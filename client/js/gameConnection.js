@@ -296,30 +296,25 @@ class WebSocketGameConnection extends GameConnection {
         this.ws.send(`settings ${colorIndex} ${emojiIndex}`);
     }
 
-    async openCell(x, y) {
+    async act(action, x, y) {
         if (!this.connected) throw new Error("Not connected");
-        return new Promise((resolve, reject) => {
-            try {
-                this.ws.send(`open ${x} ${y}`);
-                // The server will send an 'update' message if successful
-                resolve(true);
-            } catch (error) {
-                reject(error);
-            }
-        });
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(`act ${action} ${x} ${y}`);
+        } else {
+            throw new Error("WebSocket not open");
+        }
+    }
+
+    async openCell(x, y) {
+        return this.act(1, x, y); // OPEN = 1
     }
 
     async markCell(x, y) {
-        if (!this.connected) throw new Error("Not connected");
-        return new Promise((resolve, reject) => {
-            try {
-                this.ws.send(`mark ${x} ${y}`);
-                // The server will send an 'update' message if successful
-                resolve(true);
-            } catch (error) {
-                reject(error);
-            }
-        });
+        return this.act(2, x, y); // MARK = 2
+    }
+
+    async unmarkCell(x, y) {
+        return this.act(3, x, y); // UNMARK = 3
     }
 
     getGridInfo() {
