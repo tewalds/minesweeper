@@ -52,7 +52,7 @@ const PlayScreen = {
 
             GameState.connection.onUpdate = (state, x, y, userId) => {
                 console.log('Received update from server:', { state, x, y, userId });
-                this.processServerUpdate({ x, y, state });
+                this.processServerUpdate({ x, y, state, userId });
             };
 
             // Request initial view with explicit coordinates
@@ -89,17 +89,12 @@ const PlayScreen = {
     },
 
     // Update cell state
-    updateCell: function (x, y, state) {
+    updateCell: function (x, y, state, userId) {
         const key = `${x},${y}`;
 
-        // States from server:
-        // 0-8: Revealed cell with N adjacent mines
-        // 9: Revealed mine
-        // 10: Hidden cell
-        // 11: Marked/flagged cell
-        if (state >= 0 && state <= 8) {
+        if (state >= 0 && state <= 8) { // Revealed cell
             this.revealed.add(key);
-            this.markers.delete(key);
+            this.markers.delete(key); // Remove any flags
             const cell = this.visibleCells.get(key);
             if (cell) {
                 cell.className = 'grid-cell revealed';
@@ -126,17 +121,21 @@ const PlayScreen = {
             if (cell) {
                 cell.className = 'grid-cell';
                 cell.textContent = '';
+                cell.style.color = ''; // Clear any color
             }
         } else if (state === 11) { // MARKED
             this.revealed.delete(key);
-            this.markers.set(key, {
-                username: GameState.currentUser.username,
-                avatar: '🚩'
-            });
-            const cell = this.visibleCells.get(key);
-            if (cell) {
-                cell.className = 'grid-cell';
-                cell.textContent = '🚩';
+            // Only set marker if we have a userId
+            if (userId !== undefined) {
+                this.markers.set(key, { userId });
+                const cell = this.visibleCells.get(key);
+                if (cell) {
+                    cell.className = 'grid-cell';
+                    // Update visual state immediately
+                    this.updateCellMarker(cell, key);
+                }
+            } else {
+                console.warn('Received MARKED state without userId:', { x, y, state });
             }
         }
     },
@@ -146,7 +145,7 @@ const PlayScreen = {
         if (!updates || !Array.isArray(updates)) return;
 
         updates.forEach(update => {
-            this.updateCell(update.x, update.y, update.state);
+            this.updateCell(update.x, update.y, update.state, update.userId);
         });
 
         // Update visible cells
@@ -200,7 +199,15 @@ const PlayScreen = {
 
         // Optimistically update the visual state
         if (action === 'flag') {
-            this.markers.set(key, { username, avatar });
+            // Find userId from username
+            let userId = null;
+            for (const [id, userData] of GameState.players.entries()) {
+                if (userData.name === username) {
+                    userId = id;
+                    break;
+                }
+            }
+            this.markers.set(key, { userId });
         } else if (action === 'unflag') {
             this.markers.delete(key);
         } else if (action === 'reveal') {
@@ -219,7 +226,16 @@ const PlayScreen = {
             const key = `${x},${y}`;
             const marker = this.markers.get(`${x},${y}`);
 
-            if (marker?.username === username) {
+            // Find userId from username
+            let userId = null;
+            for (const [id, userData] of GameState.players.entries()) {
+                if (userData.name === username) {
+                    userId = id;
+                    break;
+                }
+            }
+
+            if (marker?.userId === userId) {
                 // Remove own flag
                 this.updateVisualState(x, y, username, avatar, 'unflag');
                 await GameState.connection.markCell(x, y);
@@ -1272,34 +1288,11 @@ const PlayScreen = {
     updateVisibleCellStates: function () {
         for (const [key, cell] of this.visibleCells.entries()) {
             if (this.revealed.has(key)) {
-                continue;
+                continue; // Skip revealed cells - they're handled in updateCell
             }
 
-            const marker = this.markers.get(key);
-            if (marker) {
-                // Find the player who placed this marker
-                let playerData = null;
-                for (const [userId, userData] of GameState.players.entries()) {
-                    if (userData.name === marker.username) {
-                        playerData = userData;
-                        break;
-                    }
-                }
-
-                if (playerData) {
-                    // Use server player data
-                    cell.textContent = playerData.avatar;
-                    cell.style.color = playerData.color;
-                } else {
-                    // Fallback to marker data
-                    cell.textContent = marker.avatar;
-                    cell.style.color = marker.color;
-                }
-            } else {
-                cell.className = 'grid-cell';
-                cell.textContent = '';
-                cell.style.color = '';
-            }
+            // Update marker if present
+            this.updateCellMarker(cell, key);
         }
     },
 
@@ -1452,8 +1445,8 @@ const PlayScreen = {
         // Store the state before updating
         const oldState = this.revealed.has(update.x + ',' + update.y);
 
-        // Update the cell
-        this.updateCell(update.x, update.y, update.state);
+        // Update the cell - now passing userId
+        this.updateCell(update.x, update.y, update.state, update.userId);
 
         // Force a visual update only if state changed
         if (oldState !== this.revealed.has(update.x + ',' + update.y)) {
@@ -1464,5 +1457,30 @@ const PlayScreen = {
                 this.updateVisibleCellStates();
             }
         }
+    },
+
+    // Add new helper method to update cell marker visuals
+    updateCellMarker: function (cell, key) {
+        const marker = this.markers.get(key);
+        if (!marker) {
+            // No marker, clear the cell
+            cell.textContent = '';
+            cell.style.color = '';
+            return;
+        }
+
+        // Find player data for this marker
+        const playerData = GameState.players.get(marker.userId);
+        if (!playerData) {
+            // If we don't have player data, clear the marker
+            this.markers.delete(key);
+            cell.textContent = '';
+            cell.style.color = '';
+            return;
+        }
+
+        // Render the player's avatar in their color
+        cell.textContent = playerData.avatar;
+        cell.style.color = playerData.color;
     }
 }; 

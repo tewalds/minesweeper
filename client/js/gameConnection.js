@@ -32,7 +32,7 @@ class WebSocketGameConnection extends GameConnection {
         this.loginPromise = null;  // Track login completion
         this.gridInfo = null;  // Store grid info
         this.onUpdate = (state, x, y, userId) => {
-            PlayScreen.processServerUpdate({ x, y, state });
+            PlayScreen.processServerUpdate({ x, y, state, userId });
         };
     }
 
@@ -81,6 +81,7 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'update': {
                                 const [state, x, y, userId] = args.map(Number);
+                                console.log('Parsed update message:', { state, x, y, userId });
                                 this.onUpdate(state, x, y, userId);
                                 break;
                             }
