@@ -1247,10 +1247,8 @@ const PlayScreen = {
             grid.appendChild(fragment);
         }
 
-        // Only update states if needed
-        if (updatesNeeded) {
-            this.updateVisibleCellStates();
-        }
+        // Always update states after changing visible cells
+        this.updateVisibleCellStates();
     },
 
     // Update the states of visible cells
