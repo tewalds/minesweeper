@@ -35,50 +35,31 @@ const LoginScreen = {
                 GameStorage.save(GameStorage.USERNAME_KEY, username);
                 GameState.currentUser.username = username;
 
-                if (GameState.connection instanceof WebSocketGameConnection) {
-                    try {
-                        console.log('Attempting to login with username:', username);
-                        // Login with username
-                        const userData = await GameState.connection.loginPlayer(username);
-                        console.log('Received user data from server:', userData);
-                        GameState.updateFromServer(userData);
+                try {
+                    console.log('Attempting to login with username:', username);
+                    // Login with username
+                    const userData = await GameState.connection.loginPlayer(username);
+                    console.log('Received user data from server:', userData);
+                    GameState.updateFromServer(userData);
 
-                        // Check if we need to customize (new user)
-                        const needsCustomization = GameState.currentUser.colorIndex === -1 || GameState.currentUser.avatarIndex === -1;
-                        console.log('User customization status:', {
-                            colorIndex: GameState.currentUser.colorIndex,
-                            avatarIndex: GameState.currentUser.avatarIndex,
-                            needsCustomization
-                        });
+                    // Check if we need to customize (new user)
+                    const needsCustomization = GameState.currentUser.colorIndex === -1 || GameState.currentUser.avatarIndex === -1;
+                    console.log('User customization status:', {
+                        colorIndex: GameState.currentUser.colorIndex,
+                        avatarIndex: GameState.currentUser.avatarIndex,
+                        needsCustomization
+                    });
 
-                        if (needsCustomization) {
-                            console.log('New user, showing customize screen');
-                            App.showScreen(App.screens.CUSTOMIZE);
-                        } else {
-                            console.log('Existing user with settings, going to spawn');
-                            App.showScreen(App.screens.SPAWN);
-                        }
-                    } catch (loginError) {
-                        console.error('Login failed:', loginError);
-                        alert('Login failed. Please try again.');
-                    }
-                } else {
-                    // Local mode: Use mock DB
-                    const savedPlayer = await MockDB.getPlayer(username);
-                    console.log('Login attempt:', { username, exists: !!savedPlayer });
-
-                    if (savedPlayer) {
-                        // Existing player, load their data and go directly to spawn
-                        console.log('Loading existing player:', savedPlayer);
-                        GameState.currentUser.avatar = savedPlayer.avatar;
-                        GameState.currentUser.color = savedPlayer.color;
-                        await MockDB.updatePlayerLastSeen(username);
-                        App.showScreen(App.screens.SPAWN);
-                    } else {
-                        // New user, go to customize screen
-                        console.log('Creating new player');
+                    if (needsCustomization) {
+                        console.log('New user, showing customize screen');
                         App.showScreen(App.screens.CUSTOMIZE);
+                    } else {
+                        console.log('Existing user with settings, going to spawn');
+                        App.showScreen(App.screens.SPAWN);
                     }
+                } catch (loginError) {
+                    console.error('Login failed:', loginError);
+                    alert('Login failed. Please try again.');
                 }
             } catch (error) {
                 console.error('Login error:', error);

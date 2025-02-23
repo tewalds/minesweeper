@@ -1,7 +1,5 @@
 const App = {
     screens: {
-        CONNECTION: 'connection',
-        FILE_SELECT: 'file_select',
         LOGIN: 'login',
         CUSTOMIZE: 'customize',
         SPAWN: 'spawn',
@@ -13,8 +11,24 @@ const App = {
     init: async function () {
         this.addSettingsMenu();
 
-        // Always start with connection choice
-        this.showScreen(this.screens.CONNECTION);
+        try {
+            // Auto-connect to local server
+            const hostname = window.location.hostname;
+            const serverUrl = `ws://${hostname}:9001/minefield`;
+            const connection = new WebSocketGameConnection(serverUrl);
+
+            // Connect to server
+            if (await connection.connect()) {
+                GameState.setConnection(connection);
+                // Start with login screen
+                this.showScreen(this.screens.LOGIN);
+            } else {
+                throw new Error('Failed to connect to server');
+            }
+        } catch (error) {
+            console.error('Failed to connect:', error);
+            alert('Failed to connect to game server. Please ensure the server is running.');
+        }
     },
 
     showScreen: async function (screenName) {
@@ -25,12 +39,6 @@ const App = {
         screenContent.innerHTML = ''; // Only clear screen content
 
         switch (screenName) {
-            case this.screens.CONNECTION:
-                await ConnectionScreen.show(screenContent);
-                break;
-            case this.screens.FILE_SELECT:
-                await FileSelectScreen.show(screenContent);
-                break;
             case this.screens.LOGIN:
                 await LoginScreen.show(screenContent);
                 break;
@@ -74,7 +82,8 @@ const App = {
                     x: null,
                     y: null
                 };
-                this.showScreen(this.screens.CONNECTION);
+                // Try to reconnect after logout
+                this.init();
             }
         });
     }

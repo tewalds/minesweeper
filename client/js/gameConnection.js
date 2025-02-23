@@ -1,4 +1,4 @@
-// Base class for game connections (both mock and websocket)
+// Base class for game connections
 class GameConnection {
     constructor() {
         if (this.constructor === GameConnection) {
@@ -19,64 +19,6 @@ class GameConnection {
     async registerPlayer(name) { throw new Error("Not implemented"); }
     async openCell(x, y) { throw new Error("Not implemented"); }
     async markCell(x, y) { throw new Error("Not implemented"); }
-}
-
-// Mock implementation using existing DB
-class MockGameConnection extends GameConnection {
-    constructor(db) {
-        super();
-        this.db = db;
-        this.userId = 1; // Mock always uses ID 1
-    }
-
-    async connect() {
-        try {
-            await this.db.init();
-            this.onGridInfo(this.db.gridWidth, this.db.gridHeight, this.userId);
-            return true;
-        } catch (error) {
-            this.onError(error);
-            return false;
-        }
-    }
-
-    async disconnect() {
-        // Nothing to do for mock
-    }
-
-    async registerPlayer(name) {
-        try {
-            // Use existing mock player registration
-            this.onPlayerJoin(this.userId, name);
-            return true;
-        } catch (error) {
-            this.onError(error);
-            return false;
-        }
-    }
-
-    async openCell(x, y) {
-        try {
-            const result = await this.db.revealCell(x, y, this.userId);
-            if (result) {
-                this.onUpdate(result.state, x, y, this.userId);
-            }
-            return true;
-        } catch (error) {
-            this.onError(error);
-            return false;
-        }
-    }
-
-    async markCell(x, y) {
-        try {
-            // Implement mock cell marking
-            return true;
-        } catch (error) {
-            this.onError(error);
-            return false;
-        }
-    }
 }
 
 // WebSocket implementation for real server

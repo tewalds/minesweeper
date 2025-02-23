@@ -110,16 +110,6 @@ const GameState = {
         // Load saved user data
         this.currentUser.username = GameStorage.load(GameStorage.USERNAME_KEY);
         this.currentUser.userId = GameStorage.load(GameStorage.USERID_KEY);
-
-        // In local mode, load additional data
-        if (this.currentUser.username && !this.connection) {
-            const savedPlayer = await MockDB.getPlayer(this.currentUser.username);
-            if (savedPlayer) {
-                this.currentUser.avatar = savedPlayer.avatar;
-                this.currentUser.color = savedPlayer.color;
-                await MockDB.updatePlayerLastSeen(this.currentUser.username);
-            }
-        }
     },
 
     // Update user data from server
@@ -183,24 +173,6 @@ const GameState = {
                 lastActive: Date.now()
             });
             this.emit('playersUpdated');
-        }
-    },
-
-    // Only used in local mode now
-    finalizePlayer: async function (x, y) {
-        if (!this.connection &&
-            this.currentUser.username &&
-            this.currentUser.avatar &&
-            this.currentUser.color &&
-            x !== null &&
-            y !== null) {
-            await MockDB.addOrUpdatePlayer({
-                username: this.currentUser.username,
-                avatar: this.currentUser.avatar,
-                color: this.currentUser.color,
-                x: x,
-                y: y
-            });
         }
     }
 }; 
