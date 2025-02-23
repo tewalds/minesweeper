@@ -1,6 +1,7 @@
 const GameStorage = {
     // Keys
     USERNAME_KEY: 'minesweeper_username',
+    USERID_KEY: 'minesweeper_userid',
     AVATAR_KEY: 'minesweeper_avatar',
     COLOR_KEY: 'minesweeper_color',
 

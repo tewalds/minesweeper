@@ -36,16 +36,34 @@ const LoginScreen = {
                 GameState.currentUser.username = username;
 
                 if (GameState.connection instanceof WebSocketGameConnection) {
-                    // Server mode: Register with server and go straight to play
-                    await GameState.connection.registerPlayer(username);
-                    App.showScreen(App.screens.PLAY);
+                    // Server mode: Try to login with saved userid first
+                    const savedUserId = GameStorage.load(GameStorage.USERID_KEY);
+
+                    if (savedUserId) {
+                        try {
+                            // Attempt to login with saved userid
+                            const userData = await GameState.connection.loginPlayer(savedUserId);
+                            GameState.updateFromServer(userData);
+
+                            // Login successful, go directly to spawn screen
+                            App.showScreen(App.screens.SPAWN);
+                            return;
+                        } catch (loginError) {
+                            console.log('Login failed, proceeding with registration:', loginError);
+                            // Login failed, clear saved userid
+                            GameStorage.save(GameStorage.USERID_KEY, null);
+                        }
+                    }
+
+                    // No saved userid or login failed, go to customize screen for registration
+                    App.showScreen(App.screens.CUSTOMIZE);
                 } else {
                     // Local mode: Use mock DB
                     const savedPlayer = await MockDB.getPlayer(username);
                     console.log('Login attempt:', { username, exists: !!savedPlayer });
 
                     if (savedPlayer) {
-                        // Existing player, load their data and go to spawn
+                        // Existing player, load their data and go directly to spawn
                         console.log('Loading existing player:', savedPlayer);
                         GameState.currentUser.avatar = savedPlayer.avatar;
                         GameState.currentUser.color = savedPlayer.color;

@@ -1092,8 +1092,25 @@ const PlayScreen = {
         if (logoutButton) {
             logoutButton.addEventListener('click', (e) => {
                 e.stopPropagation();
-                window.location.hash = '#login';
-                settingsDropdown?.classList.add('hidden');
+                // Disconnect from server/clear connection
+                GameState.disconnect();
+
+                // Clear user data but keep username for convenience
+                const username = GameState.currentUser.username;
+                GameState.currentUser = {
+                    username,
+                    userId: null,
+                    avatar: null,
+                    color: null,
+                    score: 0,
+                    view: null
+                };
+
+                // Clear saved user ID
+                GameStorage.save(GameStorage.USERID_KEY, null);
+
+                // Return to connection screen
+                App.showScreen(App.screens.CONNECTION);
             });
         }
 

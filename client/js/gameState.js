@@ -34,10 +34,11 @@ const GameState = {
 
     currentUser: {
         username: null,
+        userId: null,
         avatar: null,
         color: null,
-        x: null,
-        y: null
+        score: 0,
+        view: null
     },
 
     // Add connection management
@@ -55,29 +56,51 @@ const GameState = {
             this.connection.disconnect();
             this.connection = null;
         }
+        // Clear current user data but keep username for convenience
+        const username = this.currentUser.username;
+        this.currentUser = {
+            username,
+            userId: null,
+            avatar: null,
+            color: null,
+            score: 0,
+            view: null
+        };
     },
 
     init: async function () {
         // Load saved user data
         this.currentUser.username = GameStorage.load(GameStorage.USERNAME_KEY);
-        if (this.currentUser.username) {
+        this.currentUser.userId = GameStorage.load(GameStorage.USERID_KEY);
+
+        // In local mode, load additional data
+        if (this.currentUser.username && !this.connection) {
             const savedPlayer = await MockDB.getPlayer(this.currentUser.username);
             if (savedPlayer) {
-                // Existing player found in DB, load all their data
                 this.currentUser.avatar = savedPlayer.avatar;
                 this.currentUser.color = savedPlayer.color;
-                this.currentUser.x = savedPlayer.position.x;
-                this.currentUser.y = savedPlayer.position.y;
                 await MockDB.updatePlayerLastSeen(this.currentUser.username);
             }
-            // If not found in DB, they'll go through the full setup flow
         }
     },
 
-    // New method to create/update player in DB
+    // Update user data from server
+    updateFromServer: function (userData) {
+        this.currentUser.userId = userData.userId;
+        this.currentUser.username = userData.name;
+        this.currentUser.avatar = userData.avatar;
+        this.currentUser.color = userData.color;
+        this.currentUser.score = userData.score;
+        this.currentUser.view = userData.view;
+
+        // Save userid for future logins
+        GameStorage.save(GameStorage.USERID_KEY, userData.userId);
+    },
+
+    // Only used in local mode now
     finalizePlayer: async function (x, y) {
-        // Only create/update player when we have all required data
-        if (this.currentUser.username &&
+        if (!this.connection &&
+            this.currentUser.username &&
             this.currentUser.avatar &&
             this.currentUser.color &&
             x !== null &&

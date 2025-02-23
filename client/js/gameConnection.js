@@ -87,6 +87,7 @@ class WebSocketGameConnection extends GameConnection {
         this.ws = null;
         this.connected = false;
         this.registrationPromise = null;  // Track registration completion
+        this.loginPromise = null;  // Track login completion
         this.gridInfo = null;  // Store grid info
     }
 
@@ -128,10 +129,9 @@ class WebSocketGameConnection extends GameConnection {
 
                         switch (command) {
                             case 'grid': {
-                                const [width, height, userId] = args.map(Number);
-                                this.userId = userId;  // Store userId for later use
-                                this.gridInfo = { width, height, userId };  // Store grid info
-                                this.onGridInfo(width, height, userId);
+                                const [width, height] = args.map(Number);
+                                this.gridInfo = { width, height };  // Store grid info
+                                this.onGridInfo(width, height);
                                 break;
                             }
                             case 'update': {
@@ -139,16 +139,53 @@ class WebSocketGameConnection extends GameConnection {
                                 this.onUpdate(state, x, y, updateUserId);
                                 break;
                             }
-                            case 'join': {
-                                const [joinUserId, name] = [Number(args[0]), args[1]];
-                                this.onPlayerJoin(joinUserId, name);
-                                if (joinUserId === this.userId) {
-                                    // Our registration completed
+                            case 'user': {
+                                const [userId, name, colorIndex, avatarIndex, score, viewX1, viewY1, viewX2, viewY2] = args;
+                                const userData = {
+                                    userId: parseInt(userId),
+                                    name,
+                                    color: GameState.colors[parseInt(colorIndex)],
+                                    avatar: GameState.avatars[parseInt(avatarIndex)],
+                                    score: parseInt(score),
+                                    view: {
+                                        x1: parseInt(viewX1),
+                                        y1: parseInt(viewY1),
+                                        x2: parseInt(viewX2),
+                                        y2: parseInt(viewY2)
+                                    }
+                                };
+
+                                // If this is our user data, resolve registration/login
+                                if (userData.userId === this.userId) {
                                     if (this.registrationPromise) {
-                                        this.registrationPromise.resolve();
+                                        this.registrationPromise.resolve(userData);
                                         this.registrationPromise = null;
                                     }
+                                    if (this.loginPromise) {
+                                        this.loginPromise.resolve(userData);
+                                        this.loginPromise = null;
+                                    }
                                 }
+
+                                this.onPlayerJoin(userData.userId, userData.name);
+                                break;
+                            }
+                            case 'userid': {
+                                const userId = parseInt(args[0]);
+                                this.userId = userId;
+                                break;
+                            }
+                            case 'error': {
+                                const error = args.join(' ');
+                                if (this.registrationPromise) {
+                                    this.registrationPromise.reject(new Error(error));
+                                    this.registrationPromise = null;
+                                }
+                                if (this.loginPromise) {
+                                    this.loginPromise.reject(new Error(error));
+                                    this.loginPromise = null;
+                                }
+                                this.onError(new Error(error));
                                 break;
                             }
                             case 'reset':
@@ -181,6 +218,10 @@ class WebSocketGameConnection extends GameConnection {
                         this.registrationPromise.reject(new Error(errorMsg));
                         this.registrationPromise = null;
                     }
+                    if (this.loginPromise) {
+                        this.loginPromise.reject(new Error(errorMsg));
+                        this.loginPromise = null;
+                    }
                     reject(error);
                 };
 
@@ -191,6 +232,10 @@ class WebSocketGameConnection extends GameConnection {
                     if (this.registrationPromise) {
                         this.registrationPromise.reject(new Error(msg));
                         this.registrationPromise = null;
+                    }
+                    if (this.loginPromise) {
+                        this.loginPromise.reject(new Error(msg));
+                        this.loginPromise = null;
                     }
                     this.onError(new Error(msg));
                 };
@@ -214,7 +259,7 @@ class WebSocketGameConnection extends GameConnection {
     async registerPlayer(name) {
         if (!this.connected) throw new Error("Not connected");
 
-        // Create a promise that will be resolved when we receive our join message
+        // Create a promise that will be resolved when we receive our user data
         this.registrationPromise = {};
         const promise = new Promise((resolve, reject) => {
             this.registrationPromise.resolve = resolve;
@@ -230,16 +275,57 @@ class WebSocketGameConnection extends GameConnection {
         }, 5000);
 
         try {
-            console.log('Registering player:', name);
-            this.ws.send(`register ${name}`);
-            await promise;  // Wait for join message
+            // Find indices of selected color and avatar
+            const colorIndex = GameState.colors.indexOf(GameState.currentUser.color);
+            const avatarIndex = GameState.avatars.indexOf(GameState.currentUser.avatar);
+
+            if (colorIndex === -1 || avatarIndex === -1) {
+                throw new Error("Invalid color or avatar selected");
+            }
+
+            console.log('Registering player:', name, colorIndex, avatarIndex);
+            this.ws.send(`register ${name} ${colorIndex} ${avatarIndex}`);
+            const userData = await promise;  // Wait for user data
             clearTimeout(timeout);
-            console.log('Player registered successfully');
-            return true;
+            console.log('Player registered successfully:', userData);
+            return userData;
         } catch (error) {
             clearTimeout(timeout);
             this.registrationPromise = null;
             console.error('Registration failed:', error);
+            throw error;
+        }
+    }
+
+    async loginPlayer(userId) {
+        if (!this.connected) throw new Error("Not connected");
+
+        // Create a promise that will be resolved when we receive our user data
+        this.loginPromise = {};
+        const promise = new Promise((resolve, reject) => {
+            this.loginPromise.resolve = resolve;
+            this.loginPromise.reject = reject;
+        });
+
+        // Set a timeout
+        const timeout = setTimeout(() => {
+            if (this.loginPromise) {
+                this.loginPromise.reject(new Error("Login timeout"));
+                this.loginPromise = null;
+            }
+        }, 5000);
+
+        try {
+            console.log('Logging in player:', userId);
+            this.ws.send(`login ${userId}`);
+            const userData = await promise;  // Wait for user data
+            clearTimeout(timeout);
+            console.log('Player logged in successfully:', userData);
+            return userData;
+        } catch (error) {
+            clearTimeout(timeout);
+            this.loginPromise = null;
+            console.error('Login failed:', error);
             throw error;
         }
     }

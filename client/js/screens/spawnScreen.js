@@ -1,6 +1,7 @@
 const SpawnScreen = {
     show: async function (container) {
-        const savedPlayer = await MockDB.getPlayer(GameState.currentUser.username);
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+        const savedPlayer = isServerMode ? null : await MockDB.getPlayer(GameState.currentUser.username);
 
         const html = `
             <div class="spawn-screen">
@@ -13,7 +14,7 @@ const SpawnScreen = {
                     </div>
                 </div>
                 <div class="spawn-options">
-                    ${savedPlayer ? `
+                    ${!isServerMode && savedPlayer ? `
                     <div class="spawn-method">
                         <h3>Last Position</h3>
                         <button id="last-position">Return to (${savedPlayer.position.x}, ${savedPlayer.position.y})</button>
@@ -46,23 +47,40 @@ const SpawnScreen = {
     },
 
     createPlayerList: async function () {
-        const onlinePlayers = await MockDB.getOnlinePlayers();
-        // Filter out current user from the list
-        const otherPlayers = onlinePlayers.filter(p => p.username !== GameState.currentUser.username);
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+        if (isServerMode) {
+            // TODO: Get player list from server
+            return '<div class="no-players">Waiting for player list from server...</div>';
+        } else {
+            const onlinePlayers = await MockDB.getOnlinePlayers();
+            // Filter out current user from the list
+            const otherPlayers = onlinePlayers.filter(p => p.username !== GameState.currentUser.username);
 
-        return otherPlayers.map(player => `
-            <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
-                <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
-                <span class="player-name">${player.username}</span>
-                <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
-            </div>
-        `).join('');
+            return otherPlayers.map(player => `
+                <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
+                    <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
+                    <span class="player-name">${player.username}</span>
+                    <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
+                </div>
+            `).join('');
+        }
     },
 
     // Validate and clamp coordinates to grid bounds
     validateCoordinates: function (x, y) {
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+        let gridWidth, gridHeight;
+
+        if (isServerMode && GameState.connection.gridInfo) {
+            gridWidth = GameState.connection.gridInfo.width;
+            gridHeight = GameState.connection.gridInfo.height;
+        } else {
+            gridWidth = MinesweeperDB.gridWidth;
+            gridHeight = MinesweeperDB.gridHeight;
+        }
+
+        const gridCenterX = Math.floor(gridWidth / 2);
+        const gridCenterY = Math.floor(gridHeight / 2);
 
         return {
             x: Math.max(-gridCenterX, Math.min(gridCenterX, x)),
@@ -74,25 +92,33 @@ const SpawnScreen = {
         try {
             // Validate and clamp coordinates
             const validPos = this.validateCoordinates(x, y);
-            GameState.currentUser.x = validPos.x;
-            GameState.currentUser.y = validPos.y;
-
-            // Ensure we have all required data before proceeding
-            if (!GameState.currentUser.username ||
-                !GameState.currentUser.avatar ||
-                !GameState.currentUser.color ||
-                validPos.x === null ||
-                validPos.y === null) {
-                throw new Error('Missing required player data');
-            }
 
             const isServerMode = GameState.connection instanceof WebSocketGameConnection;
             if (isServerMode) {
-                // In server mode, just register and go straight to play
-                await GameState.connection.registerPlayer(GameState.currentUser.username);
+                if (!GameState.currentUser.userId) {
+                    // Register with server first
+                    const userData = await GameState.connection.registerPlayer(GameState.currentUser.username);
+                    GameState.updateFromServer(userData);
+                }
+
+                // Send initial view centered on spawn position
+                const viewSize = 20; // View radius
+                GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
                 await App.showScreen(App.screens.PLAY);
             } else {
-                // In local mode, save player data and proceed
+                // Local mode
+                GameState.currentUser.x = validPos.x;
+                GameState.currentUser.y = validPos.y;
+
+                // Ensure we have all required data before proceeding
+                if (!GameState.currentUser.username ||
+                    !GameState.currentUser.avatar ||
+                    !GameState.currentUser.color ||
+                    validPos.x === null ||
+                    validPos.y === null) {
+                    throw new Error('Missing required player data');
+                }
+
                 await GameState.finalizePlayer(validPos.x, validPos.y);
                 await App.showScreen(App.screens.PLAY);
             }

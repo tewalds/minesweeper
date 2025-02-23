@@ -27,47 +27,93 @@ const CustomizeScreen = {
         `;
         container.innerHTML = html;
 
+        // Hide back button if we have a userId (registered player)
+        if (GameState.currentUser.userId) {
+            document.querySelector('.back-button').style.display = 'none';
+        }
+
         this.attachEventListeners();
         this.loadSavedSelections();
     },
 
     createAvatarGrid: function () {
-        return GameState.avatars.map(avatar =>
-            `<div class="avatar-option" data-avatar="${avatar}">${avatar}</div>`
+        return GameState.avatars.map((avatar, index) =>
+            `<div class="avatar-option" data-avatar="${avatar}" data-index="${index}">${avatar}</div>`
         ).join('');
     },
 
     createColorGrid: function () {
-        return GameState.colors.map(color =>
-            `<div class="color-option" style="background-color: ${color}" data-color="${color}"></div>`
+        return GameState.colors.map((color, index) =>
+            `<div class="color-option" style="background-color: ${color}" data-color="${color}" data-index="${index}"></div>`
         ).join('');
     },
 
     loadSavedSelections: function () {
         const username = GameState.currentUser.username;
-        const savedAvatar = GameStorage.loadUserData(username, 'avatar');
-        const savedColor = GameStorage.loadUserData(username, 'color');
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
 
-        if (savedAvatar) {
-            document.querySelector(`[data-avatar="${savedAvatar}"]`)?.classList.add('selected');
-            document.getElementById('avatar-preview').textContent = savedAvatar;
-        }
-        if (savedColor) {
-            document.querySelector(`[data-color="${savedColor}"]`)?.classList.add('selected');
-            document.getElementById('color-preview').style.backgroundColor = savedColor;
-        }
+        if (!isServerMode) {
+            // Only load saved selections in local mode
+            const savedAvatar = GameStorage.loadUserData(username, 'avatar');
+            const savedColor = GameStorage.loadUserData(username, 'color');
 
-        document.getElementById('customize-done').disabled = !(savedAvatar && savedColor);
+            if (savedAvatar) {
+                document.querySelector(`[data-avatar="${savedAvatar}"]`)?.classList.add('selected');
+                document.getElementById('avatar-preview').textContent = savedAvatar;
+            }
+            if (savedColor) {
+                document.querySelector(`[data-color="${savedColor}"]`)?.classList.add('selected');
+                document.getElementById('color-preview').style.backgroundColor = savedColor;
+            }
+
+            document.getElementById('customize-done').disabled = !(savedAvatar && savedColor);
+        }
     },
 
     attachEventListeners: function () {
         const avatarGrid = document.querySelector('.avatar-grid');
         const colorGrid = document.querySelector('.color-grid');
         const continueBtn = document.getElementById('customize-done');
+        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
 
         // Back button
         document.querySelector('.back-button').addEventListener('click', () => {
             App.showScreen(App.screens.LOGIN);
+        });
+
+        // Settings toggle
+        document.querySelector('.settings-toggle').addEventListener('click', (e) => {
+            const dropdown = document.querySelector('.settings-dropdown');
+            dropdown.classList.toggle('hidden');
+            e.stopPropagation();
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            document.querySelector('.settings-dropdown').classList.add('hidden');
+        });
+
+        // Logout button
+        document.querySelector('.logout-button').addEventListener('click', () => {
+            // Disconnect from server/clear connection
+            GameState.disconnect();
+
+            // Clear user data but keep username for convenience
+            const username = GameState.currentUser.username;
+            GameState.currentUser = {
+                username,
+                userId: null,
+                avatar: null,
+                color: null,
+                score: 0,
+                view: null
+            };
+
+            // Clear saved user ID
+            GameStorage.save(GameStorage.USERID_KEY, null);
+
+            // Return to connection screen
+            App.showScreen(App.screens.CONNECTION);
         });
 
         avatarGrid.addEventListener('click', (e) => {
@@ -80,7 +126,10 @@ const CustomizeScreen = {
 
             const avatar = avatarOption.dataset.avatar;
             document.getElementById('avatar-preview').textContent = avatar;
-            GameStorage.saveUserData(GameState.currentUser.username, 'avatar', avatar);
+
+            if (!isServerMode) {
+                GameStorage.saveUserData(GameState.currentUser.username, 'avatar', avatar);
+            }
             GameState.currentUser.avatar = avatar;
 
             // Enable continue if both selected
@@ -97,7 +146,10 @@ const CustomizeScreen = {
 
             const color = colorOption.dataset.color;
             document.getElementById('color-preview').style.backgroundColor = color;
-            GameStorage.saveUserData(GameState.currentUser.username, 'color', color);
+
+            if (!isServerMode) {
+                GameStorage.saveUserData(GameState.currentUser.username, 'color', color);
+            }
             GameState.currentUser.color = color;
 
             // Enable continue if both selected
