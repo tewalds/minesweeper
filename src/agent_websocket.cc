@@ -250,26 +250,13 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
     }
   } else {
     users_[userid].last_active =  std::chrono::system_clock::now();
-    if (command == "open") {
-      int x, y;
-      iss >> x >> y;
+    if (command == "act") {
+      int a, x, y;
+      iss >> a >> x >> y;
+      ActionType action= static_cast<ActionType>(a);
       Pointi p(x, y);
-      if (state_.rect().contains(p)) {
-        actions_.lock()->push({OPEN, p, userid});
-      }
-    } else if (command == "mark") {
-      int x, y;
-      iss >> x >> y;
-      Pointi p(x, y);
-      if (state_.rect().contains(p)) {
-        actions_.lock()->push({MARK, p, userid});
-      }
-    } else if (command == "unmark") {
-      int x, y;
-      iss >> x >> y;
-      Pointi p(x, y);
-      if (state_.rect().contains(p)) {
-        actions_.lock()->push({UNMARK, p, userid});
+      if (state_.rect().contains(p) && (action == OPEN || action == MARK || action == UNMARK)) {
+        actions_.lock()->push({action, p, userid});
       }
     } else if (command == "view") {
       int x1, y1, x2, y2, force;

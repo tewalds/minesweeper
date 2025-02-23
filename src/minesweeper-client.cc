@@ -124,12 +124,8 @@ int main(int argc, char **argv) {
           cur_mouse = s->agent->get_mouse();
         }
 
-        if (action.action == OPEN) {
-          client.ws_send(absl::StrFormat("open %i %i", action.point.x, action.point.y));
-        } else if (action.action == MARK) {
-          client.ws_send(absl::StrFormat("mark %i %i", action.point.x, action.point.y));
-        } else if (action.action == UNMARK) {
-          client.ws_send(absl::StrFormat("unmark %i %i", action.point.x, action.point.y));
+        if (action.action == OPEN || action.action == MARK || action.action == UNMARK) {
+          client.ws_send(absl::StrFormat("act %i %i %i", action.action, action.point.x, action.point.y));
         } else if (action.action == PASS) {
           // ignore
         } else if (action.action == QUIT) {

@@ -147,22 +147,16 @@ int main(int argc, char **argv) {
           s->updates.clear();
         }
 
-        if (action.action == PASS || action.action == RESET || action.action == PAUSE) {
-          // ignore
+        if (action.action == OPEN || action.action == MARK || action.action == UNMARK) {
+          client.ws_send(absl::StrFormat("mouse %i.5 %i.5", action.point.x, action.point.y));
+          client.ws_send(absl::StrFormat("act %i %i %i", action.action, action.point.x, action.point.y));
+          ping_pong.send(client).wait();
         } else if (action.action == QUIT) {
           done = true;
           break;
         } else {
-          client.ws_send(absl::StrFormat("mouse %i.5 %i.5", action.point.x, action.point.y));
-          if (action.action == OPEN) {
-            client.ws_send(absl::StrFormat("open %i %i", action.point.x, action.point.y));
-          } else if (action.action == MARK) {
-            client.ws_send(absl::StrFormat("mark %i %i", action.point.x, action.point.y));
-          } else if (action.action == UNMARK) {
-            client.ws_send(absl::StrFormat("unmark %i %i", action.point.x, action.point.y));
-          }
+          // Ignore PASS, RESET, PAUSE.
         }
-        ping_pong.send(client).wait();
       } else {
         auto s = state.lock();
         if (s->dims.x > 0 && s->dims.y > 0 && s->userid > 0) {

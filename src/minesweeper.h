@@ -137,14 +137,14 @@ class Cell {
 
 
 enum ActionType : int8_t {
-  PASS,
-  OPEN,
-  MARK,
-  UNMARK,
+  PASS = 0,
+  OPEN = 1,
+  MARK = 2,
+  UNMARK = 3,
 
-  RESET,
-  PAUSE,
-  QUIT,
+  RESET = 4,
+  PAUSE = 5,
+  QUIT = 6,
 };
 
 struct Action {
