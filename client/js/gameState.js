@@ -71,18 +71,17 @@ const GameState = {
         color: null,
         colorIndex: -1,
         score: 0,
-        view: null,
         mouse: { x: 0, y: 0 }
     },
 
     // Add connection management
     connection: null,
 
-    setConnection: function (connectionInstance) {
+    setConnection: function (connection) {
         if (this.connection) {
             this.connection.disconnect();
         }
-        this.connection = connectionInstance;
+        this.connection = connection;
     },
 
     disconnect: function () {
@@ -100,7 +99,6 @@ const GameState = {
             color: null,
             colorIndex: -1,
             score: 0,
-            view: null,
             mouse: { x: 0, y: 0 }
         };
         // Clear players
@@ -131,7 +129,6 @@ const GameState = {
         }
 
         this.currentUser.score = userData.score;
-        this.currentUser.view = userData.view;
 
         this.players.set(userData.userId, {
             ...userData,

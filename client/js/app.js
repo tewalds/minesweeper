@@ -92,4 +92,4 @@ document.addEventListener('DOMContentLoaded', () => {
     App.init().catch(error => {
         console.error('Failed to initialize app:', error);
     });
-}); 
+});

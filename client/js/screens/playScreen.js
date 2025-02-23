@@ -69,7 +69,7 @@ const PlayScreen = {
                 avatar: player.avatar,
                 color: player.color,
                 score: player.score,
-                view: player.view,
+                mouse: player.mouse,
                 lastActive: Date.now()
             });
         });
@@ -1174,10 +1174,9 @@ const PlayScreen = {
         };
 
         // Only send view update if it changed
-        const viewStr = `${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
-        if (viewStr !== this.currentView) {
-            this.currentView = viewStr;
-            GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}`);
+        if (bounds !== this.bounds) {
+            this.currentView = bounds;
+            GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom} 0`);
         }
 
         return bounds;
@@ -1296,17 +1295,16 @@ const PlayScreen = {
 
         // Process each player from GameState
         for (const [userId, playerData] of GameState.players.entries()) {
-            // Skip current user and inactive players (no view data)
-            if (userId === GameState.currentUser.userId || !playerData.view) {
+            // Skip current user and inactive players (no mouse data)
+            if (userId === GameState.currentUser.userId || !playerData.mouse ||
+                (playerData.mouse.x == 0 && playerData.mouse.y == 0)) {
                 continue;
             }
 
             // Calculate player position - prefer mouse position if available
             // Adjust coordinates to be relative to grid center
-            const viewCenterX = (playerData.view.x1 + playerData.view.x2) / 2 - gridCenterX;
-            const viewCenterY = (playerData.view.y1 + playerData.view.y2) / 2 - gridCenterY;
-            const x = playerData.mouse ? playerData.mouse.x - gridCenterX : viewCenterX;
-            const y = playerData.mouse ? playerData.mouse.y - gridCenterY : viewCenterY;
+            const x = playerData.mouse.x;
+            const y = playerData.mouse.y;
 
             // Check if player is visible in current viewport
             const isVisible = this.isPlayerVisible(x, y, container);
