@@ -13,9 +13,7 @@ const App = {
 
         try {
             // Auto-connect to local server
-            const hostname = window.location.hostname;
-            const serverUrl = `ws://${hostname}:9001/minefield`;
-            const connection = new WebSocketGameConnection(serverUrl);
+            const connection = new WebSocketGameConnection(Config.SERVER.DEFAULT_URL);
 
             // Connect to server
             if (await connection.connect()) {
