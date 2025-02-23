@@ -70,69 +70,47 @@ const SpawnScreen = {
     },
 
     createPlayerList: async function () {
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        console.log('Creating player list, server mode:', isServerMode);
+        const onlinePlayers = [];
+        const now = Date.now();
+        const timeLimit = now - (60 * 1000); // Players active in last minute
 
-        if (isServerMode) {
-            // Get list of active players from server's user data
-            const onlinePlayers = [];
-            const now = Date.now();
-            const timeLimit = now - (60 * 1000); // Players active in last minute
-
-            // Filter and format player data
-            for (const [userId, userData] of GameState.players.entries()) {
-                if (userData.lastActive > timeLimit && userData.userId !== GameState.currentUser.userId) {
-                    onlinePlayers.push({
-                        username: userData.name,
-                        avatar: userData.avatar,
-                        color: userData.color,
-                        position: {
-                            x: userData.view?.x1 || 0,
-                            y: userData.view?.y1 || 0
-                        }
-                    });
-                }
+        // Filter and format player data
+        for (const [userId, userData] of GameState.players.entries()) {
+            if (userData.lastActive > timeLimit && userData.userId !== GameState.currentUser.userId) {
+                onlinePlayers.push({
+                    username: userData.name,
+                    avatar: userData.avatar,
+                    color: userData.color,
+                    position: {
+                        x: userData.view?.x1 || 0,
+                        y: userData.view?.y1 || 0
+                    }
+                });
             }
-
-            if (onlinePlayers.length === 0) {
-                return '<div class="no-players">No other players online</div>';
-            }
-
-            return onlinePlayers.map(player => `
-                <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
-                    <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
-                    <span class="player-name">${player.username}</span>
-                    <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
-                </div>
-            `).join('');
-        } else {
-            const onlinePlayers = await MockDB.getOnlinePlayers();
-            // Filter out current user from the list
-            const otherPlayers = onlinePlayers.filter(p => p.username !== GameState.currentUser.username);
-
-            return otherPlayers.map(player => `
-                <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
-                    <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
-                    <span class="player-name">${player.username}</span>
-                    <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
-                </div>
-            `).join('');
         }
+
+        if (onlinePlayers.length === 0) {
+            return '<div class="no-players">No other players online</div>';
+        }
+
+        return onlinePlayers.map(player => `
+            <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
+                <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
+                <span class="player-name">${player.username}</span>
+                <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
+            </div>
+        `).join('');
     },
 
     // Validate and clamp coordinates to grid bounds
     validateCoordinates: function (x, y) {
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        let gridWidth, gridHeight;
-
-        if (isServerMode && GameState.connection.gridInfo) {
-            gridWidth = GameState.connection.gridInfo.width;
-            gridHeight = GameState.connection.gridInfo.height;
-        } else {
-            gridWidth = MinesweeperDB.gridWidth;
-            gridHeight = MinesweeperDB.gridHeight;
+        const gridInfo = GameState.connection.getGridInfo();
+        if (!gridInfo) {
+            throw new Error("Grid information not available");
         }
 
+        const gridWidth = gridInfo.width;
+        const gridHeight = gridInfo.height;
         const gridCenterX = Math.floor(gridWidth / 2);
         const gridCenterY = Math.floor(gridHeight / 2);
 
@@ -195,7 +173,18 @@ const SpawnScreen = {
         targetY = validTarget.y;
 
         // Get all players
-        const onlinePlayers = await MockDB.getOnlinePlayers();
+        const onlinePlayers = [];
+        for (const [userId, userData] of GameState.players.entries()) {
+            if (userData.view) {
+                onlinePlayers.push({
+                    position: {
+                        x: userData.view.x1,
+                        y: userData.view.y1
+                    }
+                });
+            }
+        }
+
         const occupiedPositions = new Set(onlinePlayers.map(p => `${p.position.x},${p.position.y}`));
 
         // First try immediate adjacent positions (distance 1)
@@ -309,21 +298,16 @@ const SpawnScreen = {
         const randomSpawnBtn = document.querySelector('.spawn-button[data-spawn="random"]');
         if (randomSpawnBtn) {
             randomSpawnBtn.addEventListener('click', () => {
-                let gridWidth, gridHeight;
-                const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-
-                if (isServerMode && GameState.connection.gridInfo) {
-                    gridWidth = GameState.connection.gridInfo.width;
-                    gridHeight = GameState.connection.gridInfo.height;
-                } else {
-                    gridWidth = MinesweeperDB.gridWidth;
-                    gridHeight = MinesweeperDB.gridHeight;
+                const gridInfo = GameState.connection.getGridInfo();
+                if (!gridInfo) {
+                    alert('Grid information not available. Please try again.');
+                    return;
                 }
 
-                const gridCenterX = Math.floor(gridWidth / 2);
-                const gridCenterY = Math.floor(gridHeight / 2);
-                const x = Math.floor(Math.random() * gridWidth) - gridCenterX;
-                const y = Math.floor(Math.random() * gridHeight) - gridCenterY;
+                const gridCenterX = Math.floor(gridInfo.width / 2);
+                const gridCenterY = Math.floor(gridInfo.height / 2);
+                const x = Math.floor(Math.random() * gridInfo.width) - gridCenterX;
+                const y = Math.floor(Math.random() * gridInfo.height) - gridCenterY;
                 this.setSpawnLocation(x, y);
             });
         }

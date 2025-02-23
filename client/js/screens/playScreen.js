@@ -32,30 +32,123 @@ const PlayScreen = {
     // Track the current view for efficient updates
     currentView: null,
 
-    // Generate a new target position near current position
-    generateTargetPosition: function (currentX, currentY) {
-        // Pick a random distance (1-5 cells)
-        const distance = Math.floor(Math.random() * (this.MAX_MOVE_DISTANCE - this.MIN_MOVE_DISTANCE + 1)) + this.MIN_MOVE_DISTANCE;
+    // Track grid dimensions
+    gridWidth: 0,
+    gridHeight: 0,
 
-        // Pick one of 8 directions (like adjacent cells)
-        const directions = [
-            { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-            { x: -1, y: 0 }, { x: 1, y: 0 },
-            { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 }
-        ];
-        const dir = directions[Math.floor(Math.random() * directions.length)];
+    // Track revealed cells and markers
+    revealed: new Set(),
+    markers: new Map(),
 
-        // Calculate new position
-        let targetX = currentX + (dir.x * distance);
-        let targetY = currentY + (dir.y * distance);
+    // Initialize game state
+    initializeGameState: function () {
+        // Clear existing state
+        this.revealed.clear();
+        this.markers.clear();
 
-        // Clamp to grid bounds
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
-        targetX = Math.max(-gridCenterX, Math.min(gridCenterX, targetX));
-        targetY = Math.max(-gridCenterY, Math.min(gridCenterY, targetY));
+        // Set up WebSocket event handlers
+        GameState.connection.ws.addEventListener('message', (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'cell_update') {
+                    this.updateCellState(data.x, data.y, data.state);
+                } else if (data.type === 'batch_update') {
+                    this.processBatchUpdates(data.updates);
+                } else if (data.type === 'player_update') {
+                    this.updatePlayerState(data);
+                }
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+            }
+        });
 
-        return { x: targetX, y: targetY };
+        // Request initial view
+        const viewSize = 20; // View radius
+        const x = GameState.currentUser.x || 0;
+        const y = GameState.currentUser.y || 0;
+        GameState.connection.ws.send(`view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize}`);
+    },
+
+    // Update player state
+    updatePlayerState: function (data) {
+        if (!data || !data.players) return;
+
+        // Update player data in GameState
+        data.players.forEach(player => {
+            GameState.players.set(player.userId, {
+                name: player.username,
+                avatar: player.avatar,
+                color: player.color,
+                score: player.score,
+                view: player.view,
+                lastActive: Date.now()
+            });
+        });
+
+        // Update visible cells
+        const grid = document.querySelector('.game-grid');
+        const container = document.querySelector('.game-container');
+        if (grid && container) {
+            this.updateVisibleCells(container, grid);
+        }
+    },
+
+    // Update cell state
+    updateCellState: function (x, y, state) {
+        const key = `${x},${y}`;
+
+        if (state >= 0 && state <= 8) {
+            // Revealed cell with N adjacent mines
+            this.revealed.add(key);
+            this.markers.delete(key);
+        } else if (state === 9) {
+            // Revealed mine
+            this.revealed.add(key);
+            this.markers.delete(key);
+        } else if (state === 10) {
+            // Hidden cell
+            this.revealed.delete(key);
+            this.markers.delete(key);
+        } else if (state === 11) {
+            // Marked/flagged cell
+            this.revealed.delete(key);
+            this.markers.set(key, {
+                username: GameState.currentUser.username,
+                avatar: '🚩'
+            });
+        }
+    },
+
+    // Process batch updates
+    processBatchUpdates: function (updates) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        updates.forEach(update => {
+            this.updateCellState(update.x, update.y, update.state);
+        });
+
+        // Update visible cells
+        const grid = document.querySelector('.game-grid');
+        const container = document.querySelector('.game-container');
+        if (grid && container) {
+            this.updateVisibleCells(container, grid);
+        }
+    },
+
+    // Update game state
+    updateGameState: function () {
+        // Update visible cells
+        const grid = document.querySelector('.game-grid');
+        const container = document.querySelector('.game-container');
+        if (grid && container) {
+            this.updateVisibleCells(container, grid);
+        }
+
+        // Update score display
+        const scoreElement = document.querySelector('.player-score');
+        if (scoreElement) {
+            scoreElement.textContent = `Score: ${GameState.currentUser.score || 0}`;
+        }
     },
 
     // Initialize movement state for a player
@@ -72,39 +165,9 @@ const PlayScreen = {
             startTime: performance.now(),
             duration: 0,
             isMoving: false,
-            hasClickedThisPhase: false, // Track if player has clicked in current phase
+            hasClickedThisPhase: false,
             idleUntil: performance.now() + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME
         };
-
-        // Initialize AI knowledge with correct spawn position
-        MinesweeperAI.initPlayerKnowledge(player.username);
-        MinesweeperAI.updatePosition(player.username, player.position.x, player.position.y);
-
-        // Also update AI's knowledge of any cells already revealed in their vision range
-        const knowledge = MinesweeperAI.getKnowledge(player.username);
-        MinesweeperDB.mines.revealed.forEach((value, key) => {
-            const [x, y] = key.split(',').map(Number);
-            if (MinesweeperAI.isInVisionRange(x, y, player.position.x, player.position.y)) {
-                knowledge.revealed.add(key);
-                // Add neighbors to frontier
-                MinesweeperAI.getNeighbors(x, y, player.position.x, player.position.y).forEach(neighbor => {
-                    const neighborKey = `${neighbor.x},${neighbor.y}`;
-                    if (!knowledge.revealed.has(neighborKey) && !knowledge.flagged.has(neighborKey)) {
-                        knowledge.frontier.add(neighborKey);
-                    }
-                });
-            }
-        });
-
-        // Update knowledge of flags in vision range
-        MinesweeperDB.mines.markers.forEach((marker, key) => {
-            const [x, y] = key.split(',').map(Number);
-            if (MinesweeperAI.isInVisionRange(x, y, player.position.x, player.position.y)) {
-                if (marker.username === player.username) {
-                    knowledge.flagged.add(key);
-                }
-            }
-        });
 
         this.playerMovements.set(player.username, state);
     },
@@ -115,11 +178,11 @@ const PlayScreen = {
 
         // Optimistically update the visual state
         if (action === 'flag') {
-            MinesweeperDB.mines.markers.set(key, { username, avatar });
+            this.markers.set(key, { username, avatar });
         } else if (action === 'unflag') {
-            MinesweeperDB.mines.markers.delete(key);
+            this.markers.delete(key);
         } else if (action === 'reveal') {
-            MinesweeperDB.mines.revealed.add(key);
+            this.revealed.add(key);
         }
 
         // Force an immediate visual update
@@ -132,70 +195,22 @@ const PlayScreen = {
 
         try {
             const key = `${x},${y}`;
+            const marker = this.markers.get(`${x},${y}`);
 
-            // Get AI's next move if this is a fake player
-            if (username !== GameState.currentUser.username) {
-                const nextMove = MinesweeperAI.getNextMove(username);
-                if (nextMove && nextMove.certainty >= 0.8) {
-                    // Use AI's suggested move instead
-                    x = nextMove.x;
-                    y = nextMove.y;
-                    if (nextMove.action === 'flag') {
-                        const marker = MinesweeperDB.mines.markers.get(`${x},${y}`);
-                        if (marker?.username === username) {
-                            // Remove own flag
-                            this.updateVisualState(x, y, username, avatar, 'unflag');
-                            await MinesweeperDB.toggleMarker(x, y, username, avatar);
-                            MinesweeperAI.updateFlag(username, x, y, false);
-                        } else if (!marker) {
-                            // Place new flag
-                            this.updateVisualState(x, y, username, avatar, 'flag');
-                            await MinesweeperDB.setMarker(x, y, username, avatar);
-                            MinesweeperAI.updateFlag(username, x, y, true);
-
-                            // Handle additional mines if provided
-                            if (nextMove.additionalMines) {
-                                for (const mine of nextMove.additionalMines) {
-                                    const mineMarker = MinesweeperDB.mines.markers.get(`${mine.x},${mine.y}`);
-                                    if (!mineMarker) {
-                                        this.updateVisualState(mine.x, mine.y, username, avatar, 'flag');
-                                        await MinesweeperDB.setMarker(mine.x, mine.y, username, avatar);
-                                        MinesweeperAI.updateFlag(username, mine.x, mine.y, true);
-                                    }
-                                }
-                            }
-                        }
-                        return;
-                    }
-                }
-            }
-
-            // Check if cell has any flag
-            const marker = MinesweeperDB.mines.markers.get(`${x},${y}`);
             if (marker?.username === username) {
                 // Remove own flag
                 this.updateVisualState(x, y, username, avatar, 'unflag');
-                await MinesweeperDB.toggleMarker(x, y, username, avatar);
-                if (username !== GameState.currentUser.username) {
-                    MinesweeperAI.updateFlag(username, x, y, false);
-                }
+                await GameState.connection.markCell(x, y);
             } else if (!marker) {
                 // Only reveal if cell isn't flagged
-                if (!MinesweeperDB.mines.revealed.has(`${x},${y}`)) {
-                    // First reveal the clicked cell
-                    await MinesweeperDB.revealCell(x, y, username);
-                    if (username !== GameState.currentUser.username) {
-                        MinesweeperAI.updateKnowledge(username, x, y, MinesweeperDB.getAdjacentMines(x, y));
-                    }
-
-                    // Update visual state after all reveals are done
+                if (!this.revealed.has(`${x},${y}`)) {
+                    await GameState.connection.openCell(x, y);
                     this.updateVisibleCells();
                 }
             }
         } catch (error) {
             console.warn(`Click failed for ${username}:`, error);
-            // On error, force a full state refresh to ensure consistency
-            await MinesweeperDB.loadMines();
+            // On error, force a full state refresh
             this.updateVisibleCellStates();
         }
     },
@@ -223,9 +238,6 @@ const PlayScreen = {
                 const progress = Math.min(1, (timestamp - state.startTime) / state.duration);
                 state.currentX = state.startX + (state.targetX - state.startX) * progress;
                 state.currentY = state.startY + (state.targetY - state.startY) * progress;
-
-                // Update AI's knowledge of current position
-                MinesweeperAI.updatePosition(username, Math.round(state.currentX), Math.round(state.currentY));
 
                 // Check if movement is complete
                 if (progress >= 1) {
@@ -328,8 +340,8 @@ const PlayScreen = {
 
     // Calculate minimum zoom to ensure grid fills viewport
     calculateMinZoom: function (containerWidth, containerHeight) {
-        const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE;
-        const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE;
+        const gridWidth = this.gridWidth * this.CELL_SIZE;
+        const gridHeight = this.gridHeight * this.CELL_SIZE;
 
         // Calculate zoom needed to fill width and height
         const zoomWidth = containerWidth / gridWidth;
@@ -346,8 +358,8 @@ const PlayScreen = {
         const grid = document.querySelector('.game-grid');
         if (!container || !grid) return;
 
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        const gridCenterX = Math.floor(this.gridWidth / 2);
+        const gridCenterY = Math.floor(this.gridHeight / 2);
 
         // Calculate the position in screen coordinates
         const screenX = (x + gridCenterX) * this.CELL_SIZE;
@@ -366,8 +378,8 @@ const PlayScreen = {
     clampOffset: function (container) {
         if (!container) return;
 
-        const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE * this.zoom;
-        const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE * this.zoom;
+        const gridWidth = this.gridWidth * this.CELL_SIZE * this.zoom;
+        const gridHeight = this.gridHeight * this.CELL_SIZE * this.zoom;
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
 
@@ -389,85 +401,17 @@ const PlayScreen = {
     show: async function (container) {
         console.log('PlayScreen.show() - Starting initialization');
 
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        console.log('PlayScreen - Mode:', isServerMode ? 'server' : 'local');
-
-        // Set up event handlers for connection first if in server mode
-        if (isServerMode) {
-            console.log('PlayScreen - Setting up server mode handlers');
-
-            // Check if we already have grid info
-            const existingGridInfo = GameState.connection.getGridInfo();
-            if (existingGridInfo) {
-                console.log('Using existing grid info:', existingGridInfo);
-                MinesweeperDB.gridWidth = existingGridInfo.width;
-                MinesweeperDB.gridHeight = existingGridInfo.height;
-            }
-
-            // Debug current state
-            console.log('Current GameState:', {
-                user: GameState.currentUser,
-                connection: GameState.connection ? 'Connected' : 'Not connected'
-            });
-
-            GameState.connection.onUpdate = (state, x, y, userId) => {
-                this.updateCell(x, y, state);
-            };
-
-            GameState.connection.onGridInfo = (width, height, userId) => {
-                console.log('📊 Server grid info received:', {
-                    width,
-                    height,
-                    userId,
-                    currentUser: GameState.currentUser.username,
-                    isCurrentUser: userId === GameState.currentUser.userId,
-                    previousDimensions: {
-                        width: MinesweeperDB.gridWidth,
-                        height: MinesweeperDB.gridHeight
-                    }
-                });
-
-                // Store grid dimensions and update display
-                MinesweeperDB.gridWidth = width;
-                MinesweeperDB.gridHeight = height;
-
-                // Update grid CSS properties
-                const grid = document.querySelector('.game-grid');
-                if (grid) {
-                    grid.style.width = `${width * this.CELL_SIZE}px`;
-                    grid.style.height = `${height * this.CELL_SIZE}px`;
-                    grid.style.gridTemplateColumns = `repeat(${width}, ${this.CELL_SIZE}px)`;
-                    grid.style.gridTemplateRows = `repeat(${height}, ${this.CELL_SIZE}px)`;
-                }
-
-                // Clear all existing cells since we're resizing
-                this.visibleCells.forEach(cell => cell.remove());
-                this.visibleCells.clear();
-
-                this.centerGrid();
-
-                // Force a complete refresh of visible cells
-                const container = document.querySelector('.game-container');
-                if (container && grid) {
-                    this.updateVisibleCells(container, grid);
-                }
-
-                console.log('Grid dimensions updated and centered');
-            };
-
-            GameState.connection.onPlayerJoin = (userId, name) => {
-                console.log('👤 Player joined:', {
-                    userId,
-                    name,
-                    currentUser: GameState.currentUser.username,
-                    isCurrentUser: userId === GameState.currentUser.userId
-                });
-            };
+        // Get grid info from server
+        const gridInfo = GameState.connection.getGridInfo();
+        if (!gridInfo) {
+            console.error('No grid info available');
+            alert('Failed to get grid information. Please try again.');
+            return;
         }
 
-        // Only try to get score in local mode
-        const score = isServerMode ? 0 : await MinesweeperDB.getScore(GameState.currentUser.username);
-        console.log('PlayScreen - Initial score:', score);
+        // Store grid dimensions
+        this.gridWidth = gridInfo.width;
+        this.gridHeight = gridInfo.height;
 
         const html = `
             <div class="play-screen">
@@ -475,7 +419,7 @@ const PlayScreen = {
                     <div class="player-info">
                         <span style="color: ${GameState.currentUser.color || '#000'}">${GameState.currentUser.avatar || '👤'}</span>
                         <span>${GameState.currentUser.username}</span>
-                        <span class="player-score">Score: ${score}</span>
+                        <span class="player-score">Score: ${GameState.currentUser.score || 0}</span>
                     </div>
                     <div class="settings-menu">
                         <button class="settings-toggle">⚙️ Menu</button>
@@ -492,7 +436,6 @@ const PlayScreen = {
             </div>
         `;
         container.innerHTML = html;
-        console.log('PlayScreen - HTML template rendered');
 
         // Initialize game grid
         await this.initializeGrid();
@@ -522,47 +465,15 @@ const PlayScreen = {
     initializeGrid: async function () {
         console.log('PlayScreen.initializeGrid() - Starting grid initialization');
 
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        console.log('Grid initialization - Mode:', isServerMode ? 'server' : 'local');
-
-        if (isServerMode) {
-            // In server mode, initialize empty mines data structure
-            console.log('Initializing empty mines data for server mode');
-            MinesweeperDB.mines = {
-                revealed: new Set(),
-                markers: new Map()
-            };
-
-            // Check if we already have grid info from the server
-            const gridInfo = GameState.connection.getGridInfo();
-            if (gridInfo) {
-                console.log('Using cached grid info:', gridInfo);
-                MinesweeperDB.gridWidth = gridInfo.width;
-                MinesweeperDB.gridHeight = gridInfo.height;
-            } else {
-                console.log('No grid info yet, starting with 0x0');
-                MinesweeperDB.gridWidth = 0;
-                MinesweeperDB.gridHeight = 0;
-            }
-        } else {
-            // In local mode, initialize from DB
-            console.log('Loading local grid from DB...');
-            await MinesweeperDB.loadMines();
-            console.log('Local grid loaded - Dimensions:', {
-                width: MinesweeperDB.gridWidth,
-                height: MinesweeperDB.gridHeight
-            });
-        }
-
         // Initialize the grid container
         const grid = document.querySelector('.game-grid');
         if (grid) {
             // Set up grid CSS properties
             grid.style.display = 'grid';
-            grid.style.width = `${MinesweeperDB.gridWidth * this.CELL_SIZE}px`;
-            grid.style.height = `${MinesweeperDB.gridHeight * this.CELL_SIZE}px`;
-            grid.style.gridTemplateColumns = `repeat(${MinesweeperDB.gridWidth}, ${this.CELL_SIZE}px)`;
-            grid.style.gridTemplateRows = `repeat(${MinesweeperDB.gridHeight}, ${this.CELL_SIZE}px)`;
+            grid.style.width = `${this.gridWidth * this.CELL_SIZE}px`;
+            grid.style.height = `${this.gridHeight * this.CELL_SIZE}px`;
+            grid.style.gridTemplateColumns = `repeat(${this.gridWidth}, ${this.CELL_SIZE}px)`;
+            grid.style.gridTemplateRows = `repeat(${this.gridHeight}, ${this.CELL_SIZE}px)`;
             grid.style.position = 'relative';
             grid.style.transformOrigin = 'top left';
             grid.style.setProperty('--cell-size', `${this.CELL_SIZE}px`);
@@ -583,11 +494,6 @@ const PlayScreen = {
 
     updateCell: function (x, y, state) {
         const key = `${x},${y}`;
-        const previousState = {
-            wasRevealed: MinesweeperDB.mines.revealed.has(key),
-            hadMarker: MinesweeperDB.mines.markers.has(key),
-            markerDetails: MinesweeperDB.mines.markers.get(key)
-        };
 
         // States from server:
         // 0-8: Revealed cell with N adjacent mines
@@ -595,8 +501,8 @@ const PlayScreen = {
         // 10: Hidden cell
         // 11: Marked/flagged cell
         if (state >= 0 && state <= 8) { // Revealed cell with N adjacent mines
-            MinesweeperDB.mines.revealed.add(key);
-            MinesweeperDB.mines.markers.delete(key); // Remove any flags
+            this.revealed.add(key);
+            this.markers.delete(key); // Remove any flags
             const cell = this.visibleCells.get(key);
             if (cell) {
                 cell.className = 'grid-cell revealed';
@@ -609,24 +515,24 @@ const PlayScreen = {
                 }
             }
         } else if (state === 9) { // BOMB
-            MinesweeperDB.mines.revealed.add(key);
-            MinesweeperDB.mines.markers.delete(key);
+            this.revealed.add(key);
+            this.markers.delete(key);
             const cell = this.visibleCells.get(key);
             if (cell) {
                 cell.className = 'grid-cell revealed mine';
                 cell.textContent = '💣';
             }
         } else if (state === 10) { // HIDDEN
-            MinesweeperDB.mines.revealed.delete(key);
-            MinesweeperDB.mines.markers.delete(key);
+            this.revealed.delete(key);
+            this.markers.delete(key);
             const cell = this.visibleCells.get(key);
             if (cell) {
                 cell.className = 'grid-cell';
                 cell.textContent = '';
             }
         } else if (state === 11) { // MARKED
-            MinesweeperDB.mines.revealed.delete(key);
-            MinesweeperDB.mines.markers.set(key, {
+            this.revealed.delete(key);
+            this.markers.set(key, {
                 username: GameState.currentUser.username,
                 avatar: '🚩'
             });
@@ -636,13 +542,6 @@ const PlayScreen = {
                 cell.textContent = '🚩';
             }
         }
-
-        const newState = {
-            isRevealed: MinesweeperDB.mines.revealed.has(key),
-            hasMarker: MinesweeperDB.mines.markers.has(key),
-            markerDetails: MinesweeperDB.mines.markers.get(key)
-        };
-
     },
 
     createGrid: function () {
@@ -773,7 +672,7 @@ const PlayScreen = {
         // Update score
         const scoreElement = document.querySelector('.player-score');
         if (scoreElement) {
-            scoreElement.textContent = `Score: ${MinesweeperDB.getScore(GameState.currentUser.username)}`;
+            scoreElement.textContent = `Score: ${GameState.currentUser.score || 0}`;
         }
     },
 
@@ -781,8 +680,8 @@ const PlayScreen = {
         const gameContainer = document.querySelector('.game-container');
         const grid = document.querySelector('.game-grid');
         if (gameContainer && grid) {
-            const gridWidth = MinesweeperDB.gridWidth * this.CELL_SIZE;
-            const gridHeight = MinesweeperDB.gridHeight * this.CELL_SIZE;
+            const gridWidth = this.gridWidth * this.CELL_SIZE;
+            const gridHeight = this.gridHeight * this.CELL_SIZE;
 
             // Update minimum zoom based on container size
             this.MIN_ZOOM = this.calculateMinZoom(gameContainer.clientWidth, gameContainer.clientHeight);
@@ -935,7 +834,7 @@ const PlayScreen = {
             this.lastY = e.clientY;
         });
 
-        // Cell click handling for revealing cells
+        // Cell click handling
         const handleCellClick = async (e) => {
             // Prevent cell interaction if we were just dragging
             if (this.isDragging) {
@@ -955,26 +854,17 @@ const PlayScreen = {
 
             console.log('🖱️ Left click on cell:', { x, y, key });
 
-            const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-            console.log('Click mode:', isServerMode ? 'server' : 'local');
-
             // Check if cell has any flag
-            const marker = MinesweeperDB.mines.markers.get(key);
+            const marker = this.markers.get(key);
             if (marker) {
                 console.log('Cell has flag, ignoring click:', marker);
                 return;
             }
 
             try {
-                if (isServerMode) {
-                    console.log('Sending open command to server:', { x, y });
-                    const response = await GameState.connection.openCell(x, y);
-                    console.log('Server response to open:', response);
-                } else {
-                    console.log('Processing local cell open');
-                    await MinesweeperDB.revealCell(x, y, GameState.currentUser.username);
-                    await this.renderMinesweeperState();
-                }
+                console.log('Sending open command to server:', { x, y });
+                const response = await GameState.connection.openCell(x, y);
+                console.log('Server response to open:', response);
             } catch (error) {
                 console.error('Failed to process cell click:', error);
             }
@@ -1002,26 +892,10 @@ const PlayScreen = {
 
             console.log('🖱️ Right click on cell:', { x, y, key });
 
-            const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-            console.log('Click mode:', isServerMode ? 'server' : 'local');
-
             try {
-                if (isServerMode) {
-                    console.log('Sending mark command to server:', { x, y });
-                    const response = await GameState.connection.markCell(x, y);
-                    console.log('Server response to mark:', response);
-                } else {
-                    // Check if cell has any flag
-                    const marker = MinesweeperDB.mines.markers.get(key);
-                    if (marker) {
-                        console.log('Removing flag:', marker);
-                        await MinesweeperDB.toggleMarker(x, y, marker.username, marker.avatar);
-                    } else {
-                        console.log('Adding flag');
-                        await MinesweeperDB.setMarker(x, y, GameState.currentUser.username, GameState.currentUser.avatar);
-                    }
-                    await this.renderMinesweeperState();
-                }
+                console.log('Sending mark command to server:', { x, y });
+                const response = await GameState.connection.markCell(x, y);
+                console.log('Server response to mark:', response);
             } catch (error) {
                 console.error('Failed to process right click:', error);
             }
@@ -1281,33 +1155,6 @@ const PlayScreen = {
         });
     },
 
-    startUpdates: function () {
-        // Clear any existing interval
-        this.stopUpdates();
-
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-
-        // Start periodic updates for game state
-        this.updateInterval = setInterval(async () => {
-            try {
-                if (!isServerMode) {
-                    // Only load from mock DB in local mode
-                    await Promise.all([
-                        MockDB.loadPlayers(), // Refresh player data
-                        MinesweeperDB.loadMines() // Refresh mines data
-                    ]);
-                    // Cache the player data for marker updates
-                    this.cachedPlayerData = await MockDB.getOnlinePlayers();
-                    // Only update game state here, markers are updated separately
-                    await this.renderMinesweeperState();
-                }
-                // In server mode, updates come through WebSocket events
-            } catch (error) {
-                console.error('Error during periodic update:', error);
-            }
-        }, this.UPDATE_INTERVAL);
-    },
-
     startMarkerUpdates: function () {
         const updateMarkers = async (timestamp) => {
             // Check if enough time has passed since last update
@@ -1360,8 +1207,8 @@ const PlayScreen = {
         const bounds = {
             left: Math.max(0, left),
             top: Math.max(0, top),
-            right: Math.min(MinesweeperDB.gridWidth, right),
-            bottom: Math.min(MinesweeperDB.gridHeight, bottom)
+            right: Math.min(this.gridWidth, right),
+            bottom: Math.min(this.gridHeight, bottom)
         };
 
         // Only send view update if it changed
@@ -1414,7 +1261,7 @@ const PlayScreen = {
         for (let y = bounds.top; y < bounds.bottom; y++) {
             for (let x = bounds.left; x < bounds.right; x++) {
                 // Skip if outside grid boundaries
-                if (x >= MinesweeperDB.gridWidth || y >= MinesweeperDB.gridHeight) continue;
+                if (x >= this.gridWidth || y >= this.gridHeight) continue;
 
                 const key = `${x},${y}`;
                 cellsToRemove.delete(key);
@@ -1449,74 +1296,39 @@ const PlayScreen = {
 
     // Update the states of visible cells
     updateVisibleCellStates: function () {
-        // Ensure mines data structure exists
-        if (!MinesweeperDB.mines) {
-            console.warn('Mines data structure not initialized');
-            return;
-        }
-
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        const updates = [];
-
         for (const [key, cell] of this.visibleCells.entries()) {
-            const [x, y] = key.split(',').map(Number);
-            const update = { cell, classes: ['grid-cell'], html: '', color: '' };
-
-            if (MinesweeperDB.mines.revealed.has(key)) {
-                update.classes.push('revealed');
-                // In server mode, we rely on the state sent from server
-                // The state is already set in updateCell, so we just need to preserve it
-                if (cell.classList.contains('empty')) {
-                    update.classes.push('empty');
-                } else if (cell.classList.contains('mine')) {
-                    update.classes.push('mine');
-                    update.html = '💣';
-                } else {
-                    // For numbered cells, preserve the number and its class
-                    for (let i = 1; i <= 8; i++) {
-                        if (cell.classList.contains(`adjacent-${i}`)) {
-                            update.classes.push(`adjacent-${i}`);
-                            update.html = i.toString();
-                            break;
-                        }
-                    }
-                }
-            } else {
-                const marker = MinesweeperDB.mines.markers.get(key);
-                if (marker) {
-                    // Find the player who placed this marker
-                    let playerData = null;
-                    if (isServerMode) {
-                        // In server mode, get player data from GameState
-                        for (const [userId, userData] of GameState.players.entries()) {
-                            if (userData.name === marker.username) {
-                                playerData = userData;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (playerData) {
-                        // Use server player data
-                        update.html = playerData.avatar;
-                        update.color = playerData.color;
-                    } else {
-                        // Fallback to marker data (local mode or player not found)
-                        update.html = marker.avatar;
-                        update.color = marker.color;
-                    }
-                }
+            if (this.revealed.has(key)) {
+                // Preserve existing state for revealed cells
+                // The state is already set in updateCell
+                continue;
             }
 
-            updates.push(update);
-        }
+            const marker = this.markers.get(key);
+            if (marker) {
+                // Find the player who placed this marker
+                let playerData = null;
+                for (const [userId, userData] of GameState.players.entries()) {
+                    if (userData.name === marker.username) {
+                        playerData = userData;
+                        break;
+                    }
+                }
 
-        // Apply all updates directly
-        updates.forEach(update => {
-            update.cell.className = update.classes.join(' ');
-            update.cell.innerHTML = update.html;
-            update.cell.style.color = update.color;
-        });
+                if (playerData) {
+                    // Use server player data
+                    cell.textContent = playerData.avatar;
+                    cell.style.color = playerData.color;
+                } else {
+                    // Fallback to marker data
+                    cell.textContent = marker.avatar;
+                    cell.style.color = marker.color;
+                }
+            } else {
+                cell.className = 'grid-cell';
+                cell.textContent = '';
+                cell.style.color = '';
+            }
+        }
     },
 
     // Create a cell element
@@ -1547,8 +1359,8 @@ const PlayScreen = {
 
         // Get current viewport center in grid coordinates
         const rect = container.getBoundingClientRect();
-        const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-        const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
+        const gridCenterX = Math.floor(this.gridWidth / 2);
+        const gridCenterY = Math.floor(this.gridHeight / 2);
         const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE - gridCenterX;
         const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE - gridCenterY;
 
@@ -1556,17 +1368,15 @@ const PlayScreen = {
         players.forEach(player => {
             if (player.username === GameState.currentUser.username) return;
 
-            // Get player data from GameState in server mode
-            let playerData = player;
-            const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-            if (isServerMode) {
-                for (const [userId, userData] of GameState.players.entries()) {
-                    if (userData.name === player.username) {
-                        playerData = userData;
-                        break;
-                    }
+            // Get player data from GameState
+            let playerData = null;
+            for (const [userId, userData] of GameState.players.entries()) {
+                if (userData.name === player.username) {
+                    playerData = userData;
+                    break;
                 }
             }
+            if (!playerData) return;
 
             // Get simulated position if available, otherwise use static position
             const movement = this.playerMovements.get(player.username);
@@ -1588,7 +1398,6 @@ const PlayScreen = {
 
             const isVisible = this.isPlayerVisible(x, y, container);
             const screenPos = this.calculatePlayerScreenPosition(x, y, container);
-            const score = MinesweeperDB.getScore(player.username);
 
             if (isVisible && screenPos) {
                 // Player is visible on screen, show cursor
@@ -1604,31 +1413,95 @@ const PlayScreen = {
                     <div class="cursor-info">
                         <span class="cursor-avatar">${playerData.avatar}</span>
                         <span class="cursor-name">${playerData.username}</span>
-                        <span class="cursor-score">${score}</span>
+                        <span class="cursor-score">${playerData.score || 0}</span>
                     </div>
                 `;
 
                 cursorsContainer.appendChild(cursor);
             } else {
-                // Player is off screen, show edge indicator
+                // Player is off screen, show indicator
                 const angle = this.getPlayerDirection(x, y);
-                const pos = this.calculateEdgePosition(angle, container);
+                const arrow = this.getDirectionArrow(angle);
 
                 const indicator = document.createElement('div');
                 indicator.className = 'player-indicator';
-                indicator.style.left = `${pos.x}px`;
-                indicator.style.top = `${pos.y}px`;
+                indicator.style.color = playerData.color;
                 indicator.style.opacity = opacity;
 
                 indicator.innerHTML = `
-                    <span class="indicator-arrow">${this.getDirectionArrow(pos.angle)}</span>
-                    <span class="indicator-avatar" style="background-color: ${playerData.color}20">${playerData.avatar}</span>
+                    <span class="indicator-arrow">${arrow}</span>
+                    <span class="indicator-avatar">${playerData.avatar}</span>
                     <span class="indicator-name">${playerData.username}</span>
-                    <span class="indicator-score">${score}</span>
+                    <span class="indicator-score">${playerData.score || 0}</span>
                 `;
+
+                // Position indicator along screen edge
+                const indicatorPos = this.calculateIndicatorPosition(angle, container);
+                indicator.style.left = `${indicatorPos.x}px`;
+                indicator.style.top = `${indicatorPos.y}px`;
+                indicator.style.transform = `rotate(${angle}rad)`;
 
                 indicatorsContainer.appendChild(indicator);
             }
         });
+    },
+
+    // Handle AI actions
+    handleAIAction: function (action) {
+        if (!action) return;
+
+        const { x, y, action: actionType } = action;
+        if (actionType === 'reveal') {
+            GameState.connection.openCell(x, y);
+        } else if (actionType === 'flag') {
+            GameState.connection.markCell(x, y);
+            if (action.additionalMines) {
+                // Process additional mines that the AI found
+                action.additionalMines.forEach(mine => {
+                    GameState.connection.markCell(mine.x, mine.y);
+                });
+            }
+        } else if (actionType === 'move') {
+            // Update AI position
+            if (MinesweeperAI) {
+                MinesweeperAI.updatePosition(
+                    GameState.currentUser.username,
+                    x,
+                    y
+                );
+            }
+        }
+    },
+
+    // Process server updates
+    processServerUpdate: function (update) {
+        if (!update) return;
+
+        const key = `${update.x},${update.y}`;
+
+        // Update local state
+        if (update.state >= 0 && update.state <= 8) {
+            this.revealed.add(key);
+            this.markers.delete(key);
+        } else if (update.state === 9) {
+            this.revealed.add(key);
+            this.markers.delete(key);
+        } else if (update.state === 10) {
+            this.revealed.delete(key);
+            this.markers.delete(key);
+        } else if (update.state === 11) {
+            this.revealed.delete(key);
+            this.markers.set(key, {
+                username: GameState.currentUser.username,
+                avatar: '🚩'
+            });
+        }
+
+        // Update visible cells
+        const grid = document.querySelector('.game-grid');
+        const container = document.querySelector('.game-container');
+        if (grid && container) {
+            this.updateVisibleCells(container, grid);
+        }
     }
 }; 
