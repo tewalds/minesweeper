@@ -3,8 +3,7 @@ const Config = {
     SERVER: {
         // Get the current hostname
         get DEFAULT_URL() {
-            const hostname = window.location.hostname;
-            return `ws://${hostname}:9001/minefield`;
+            return `ws://${window.location.host}/minefield`;
         }
     }
 };
