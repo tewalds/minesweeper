@@ -1,6 +1,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <csignal>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -17,7 +18,6 @@
 #include "agent_last.h"
 #include "agent_random.h"
 #include "agent_sfml.h"
-#include "agent_websocket.h"
 #include "env.h"
 #include "minesweeper.h"
 #include "point.h"
@@ -26,7 +26,6 @@ ABSL_FLAG(int, size, 90, "Field size, multiplied by 16x9 for the actual size. 24
 ABSL_FLAG(float, mines, 0.16, "Mines percentage");
 ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(int, aps, 0, "Actions per second");
-ABSL_FLAG(int, port, 9001, "Port to run the websocket server on.");
 ABSL_FLAG(int, agents, 1, "Agents");
 ABSL_FLAG(int, seed, 0, "Random seed for the environment.");
 ABSL_FLAG(bool, benchmark, false, "Exit after the first run");
@@ -40,7 +39,7 @@ void signal_handler(int signal) {
 }
 
 int main(int argc, char **argv) {
-  absl::SetProgramUsageMessage("Minesweeper: including an agent, UI and websocket server.\n");
+  absl::SetProgramUsageMessage("Minesweeper: including an agent and UI.\n");
   absl::ParseCommandLine(argc, argv);
   std::signal(SIGINT, signal_handler);
 
@@ -69,10 +68,6 @@ int main(int argc, char **argv) {
   for (int i = 0; i < absl::GetFlag(FLAGS_agents); i++) {
     // agents.push_back(std::make_unique<AgentRandom>(env.state(), agents.size() + 1));
     agents.push_back(std::make_unique<AgentLast>(env.state(), agents.size() + 1));
-  }
-  if (absl::GetFlag(FLAGS_port) > 0) {
-    agents.push_back(std::make_unique<AgentWebSocket>(
-      env.state(), absl::GetFlag(FLAGS_port), std::filesystem::current_path() / "client/", agents.size() + 1));
   }
 
   std::vector<Action> actions;

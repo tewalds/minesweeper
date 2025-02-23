@@ -27,7 +27,6 @@ minesweeper: \
 		src/agent_last.o \
 		src/agent_random.o \
 		src/agent_sfml.o \
-		src/agent_websocket.o \
 		src/env.o \
 		src/kdtree.o \
 		src/minesweeper.o \
