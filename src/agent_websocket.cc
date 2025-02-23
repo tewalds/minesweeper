@@ -261,16 +261,21 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
       iss >> x >> y;
       Pointi p(x, y);
       if (state_.rect().contains(p)) {
-        int user = clients_[ctx.uuid].userid;
-        actions_.lock()->push({OPEN, p, user});
+        actions_.lock()->push({OPEN, p, userid});
       }
     } else if (command == "mark") {
       int x, y;
       iss >> x >> y;
       Pointi p(x, y);
       if (state_.rect().contains(p)) {
-        int user = clients_[ctx.uuid].userid;
-        actions_.lock()->push({MARK, p, user});
+        actions_.lock()->push({MARK, p, userid});
+      }
+    } else if (command == "unmark") {
+      int x, y;
+      iss >> x >> y;
+      Pointi p(x, y);
+      if (state_.rect().contains(p)) {
+        actions_.lock()->push({UNMARK, p, userid});
       }
     } else if (command == "view") {
       int x1, y1, x2, y2, force;

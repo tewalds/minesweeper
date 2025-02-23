@@ -58,6 +58,5 @@ latest versions of python or pygame, and is obviously much slower, and now less 
 
 ### Other
 - Support reset (Alex)
-- Click to un-flag by default (Timo)
 - Drag-to-scroll (Alex)
 - How to deploy (Timo)

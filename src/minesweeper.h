@@ -140,6 +140,7 @@ enum ActionType : int8_t {
   PASS,
   OPEN,
   MARK,
+  UNMARK,
 
   RESET,
   PAUSE,

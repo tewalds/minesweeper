@@ -50,21 +50,7 @@ std::vector<Update> Env::step(Action action) {
     q.pop_back();
     Cell& cell = state_[a.point];
     if (a.action == MARK) {
-      if (cell.state_ == MARKED) {
-        if (cell.user_ == a.user) {
-          // I marked it, so unmark.
-          cell.state_ = HIDDEN;
-          cell.user_ = a.user;
-          for (Pointi n : Neighbors(a.point, dims_, false)) {
-            state_[n].marked_ -= 1;
-          }
-          updates.push_back({HIDDEN, a.point, a.user});
-        } else {
-          // Someone else marked, so replace it with my mark.
-          cell.user_ = a.user;
-          updates.push_back({MARKED, a.point, a.user});
-        }
-      } else if (cell.state_ == HIDDEN) {
+      if (cell.state_ == HIDDEN) {
         // Mark it.
         cell.state_ = MARKED;
         cell.user_ = a.user;
@@ -72,8 +58,15 @@ std::vector<Update> Env::step(Action action) {
           state_[n].marked_ += 1;
         }
         updates.push_back({MARKED, a.point, a.user});
-      } else {
-        // std::cout << "Invalid mark action, already open\n";
+      }
+    } else if (a.action == UNMARK) {
+      if (cell.state_ == MARKED) {
+        cell.state_ = HIDDEN;
+        cell.user_ = a.user;
+        for (Pointi n : Neighbors(a.point, dims_, false)) {
+          state_[n].marked_ -= 1;
+        }
+        updates.push_back({HIDDEN, a.point, a.user});
       }
     } else if (a.action == OPEN) {
       if (cell.state_ == HIDDEN) {

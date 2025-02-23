@@ -250,7 +250,11 @@ Action AgentSFML::step(const std::vector<Update>& updates, bool paused) {
               if (event.mouseButton.button == sf::Mouse::Button::Left) {
                 actions_.push({OPEN, mouse_pos, user_});
               } else if (event.mouseButton.button == sf::Mouse::Button::Right) {
-                actions_.push({MARK, mouse_pos, user_});
+                if (image_.getPixel(mouse_pos.x, mouse_pos.y) == COLORS[MARKED]) {
+                  actions_.push({UNMARK, mouse_pos, user_});
+                } else {
+                  actions_.push({MARK, mouse_pos, user_});
+                }
               }
             }
           }

@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
       updates.clear();
       finished = true;
       for (Action a : actions) {
-        if (a.action == OPEN || a.action == MARK) {
+        if (a.action == OPEN || a.action == MARK || a.action == UNMARK) {
           bench_actions += 1;
           finished = false;
           for (Update u : env.step(a)) {

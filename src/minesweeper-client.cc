@@ -134,6 +134,8 @@ int main(int argc, char **argv) {
           client.ws_send(absl::StrFormat("open %i %i", action.point.x, action.point.y));
         } else if (action.action == MARK) {
           client.ws_send(absl::StrFormat("mark %i %i", action.point.x, action.point.y));
+        } else if (action.action == UNMARK) {
+          client.ws_send(absl::StrFormat("unmark %i %i", action.point.x, action.point.y));
         } else if (action.action == PASS) {
           // ignore
         } else if (action.action == QUIT) {
