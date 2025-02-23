@@ -139,7 +139,6 @@ const GameState = {
             ...userData,
             color: this.currentUser.color,
             avatar: this.currentUser.avatar,
-            lastActive: Date.now()
         });
         this.emit('playersUpdated');
 

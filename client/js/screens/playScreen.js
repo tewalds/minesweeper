@@ -59,8 +59,7 @@ const PlayScreen = {
             const viewSize = 20; // View radius
             const x = GameState.currentUser.x || 0;
             const y = GameState.currentUser.y || 0;
-            console.log('Requesting initial view:', `view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize}`);
-            GameState.connection.ws.send(`view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize}`);
+            GameState.connection.ws.send(`view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize} 1`);
         }
     },
 
@@ -1367,33 +1366,6 @@ const PlayScreen = {
                 `;
 
                 indicatorsContainer.appendChild(indicator);
-            }
-        }
-    },
-
-    // Handle AI actions
-    handleAIAction: function (action) {
-        if (!action) return;
-
-        const { x, y, action: actionType } = action;
-        if (actionType === 'reveal') {
-            GameState.connection.openCell(x, y);
-        } else if (actionType === 'flag') {
-            GameState.connection.markCell(x, y);
-            if (action.additionalMines) {
-                // Process additional mines that the AI found
-                action.additionalMines.forEach(mine => {
-                    GameState.connection.markCell(mine.x, mine.y);
-                });
-            }
-        } else if (actionType === 'move') {
-            // Update AI position
-            if (MinesweeperAI) {
-                MinesweeperAI.updatePosition(
-                    GameState.currentUser.username,
-                    x,
-                    y
-                );
             }
         }
     },

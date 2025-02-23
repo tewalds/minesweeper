@@ -93,8 +93,8 @@ int send_rect(const session_ptr& session, const Array2D<Cell>& state, Recti r) {
 void send_user(const session_ptr& session, const User& u) {
   auto now = std::chrono::system_clock::now();
   session->send(absl::StrFormat(
-    "user %d %s %d %d %d %d %d %d %d %d",
-    u.userid, u.name, u.color, u.emoji, u.score, u.view.tl.x, u.view.tl.y, u.view.br.x, u.view.br.y,
+    "user %d %s %d %d %d %d %d %d",
+    u.userid, u.name, u.color, u.emoji, u.score, int(u.mouse.x), int(u.mouse.y),
     std::chrono::duration_cast<std::chrono::seconds>(now - u.last_active).count()));
 }
 

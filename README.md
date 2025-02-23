@@ -46,15 +46,16 @@ latest versions of python or pygame, and is obviously much slower, and now less 
 ## TODO
 
 ### Playtest-ready
-- Accounts (Timo) 
-- Account Screens (Alex)
-- Show other players (Alex)
-- Scoring (Timo)
-- Bots (Timo)
+- WIP: Accounts (Timo)
+- WIP: Account Screens (Alex)
+- WIP: Show other players (Alex)
+- WIP: Scoring (Timo)
+- WIP: Bots (Timo)
 - Game feel (Alex)
-- Cursors (Timo)
+- WIP: Cursors (Timo)
 - Persistent game state (Timo)
   - Decide between LMDB, Tkrzw or RocksDB, all of which seem reasonable.
+- Periodically Send mouse position, not viewport
 
 ### Other
 - Support reset (Alex)

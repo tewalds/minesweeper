@@ -16,7 +16,6 @@ class GameConnection {
     // Core methods that both implementations must provide
     async connect() { throw new Error("Not implemented"); }
     async disconnect() { throw new Error("Not implemented"); }
-    async registerPlayer(name) { throw new Error("Not implemented"); }
     async openCell(x, y) { throw new Error("Not implemented"); }
     async markCell(x, y) { throw new Error("Not implemented"); }
 }
@@ -85,21 +84,18 @@ class WebSocketGameConnection extends GameConnection {
                                 break;
                             }
                             case 'user': {
-                                const [userId, name, colorIndex, avatarIndex, score, viewX1, viewY1, viewX2, viewY2, lastActiveSeconds] = args;
+                                const [userId, name, colorIndex, avatarIndex, score, mouseX, mouseY, active] = args;
                                 const userData = {
                                     userId: parseInt(userId),
                                     name,
                                     color: parseInt(colorIndex),
                                     avatar: parseInt(avatarIndex),
                                     score: parseInt(score),
-                                    view: {
-                                        x1: parseInt(viewX1),
-                                        y1: parseInt(viewY1),
-                                        x2: parseInt(viewX2),
-                                        y2: parseInt(viewY2)
+                                    mouse: {
+                                        x: parseInt(mouseX),
+                                        y: parseInt(mouseY),
                                     },
-                                    // Convert server seconds to local timestamp
-                                    lastActive: Date.now() - (parseInt(lastActiveSeconds) * 1000)
+                                    lastActive: Date.now() - 1000 * parseInt(active),
                                 };
 
                                 if (userData.userId === this.userId) {
@@ -134,14 +130,11 @@ class WebSocketGameConnection extends GameConnection {
                                 break;
                             }
                             case 'score': {
-                                const [score, x, y] = args.map(Number);
+                                const [delta, x, y] = args.map(Number);
                                 // Update the user's score in GameState
                                 if (this.userId) {
-                                    const userData = {
-                                        ...GameState.currentUser,
-                                        score: (GameState.currentUser.score || 0) + score
-                                    };
-                                    GameState.updateFromServer(userData);
+                                    GameState.currentUser.score += delta;
+                                    // TODO: Show a score effect at the x, y position.
                                 }
                                 break;
                             }
@@ -172,8 +165,6 @@ class WebSocketGameConnection extends GameConnection {
                     clearTimeout(timeout);
                     this.connected = true;
                     console.log(`Connected to ${this.serverUrl}`);
-                    // Fix: Request initial grid state after connection
-                    this.ws.send('grid');
                     resolve(true);
                 };
 
@@ -221,51 +212,6 @@ class WebSocketGameConnection extends GameConnection {
             this.ws.close();
             this.ws = null;
             this.connected = false;
-        }
-    }
-
-    async registerPlayer(name) {
-        if (!this.connected) throw new Error("Not connected");
-
-        // Create a promise that will be resolved when we receive our user data
-        this.registrationPromise = {};
-        const promise = new Promise((resolve, reject) => {
-            this.registrationPromise.resolve = resolve;
-            this.registrationPromise.reject = reject;
-        });
-
-        // Set a timeout
-        const timeout = setTimeout(() => {
-            if (this.registrationPromise) {
-                this.registrationPromise.reject(new Error("Registration timeout"));
-                this.registrationPromise = null;
-            }
-        }, 5000);
-
-        try {
-            // Find indices of selected color and avatar
-            const colorIndex = GameState.colors.indexOf(GameState.currentUser.color);
-            const avatarIndex = GameState.avatars.indexOf(GameState.currentUser.avatar);
-
-            if (colorIndex === -1 || avatarIndex === -1) {
-                throw new Error("Invalid color or avatar selected");
-            }
-
-            console.log('Registering player:', name, colorIndex, avatarIndex);
-            this.ws.send(`register ${name} ${colorIndex} ${avatarIndex}`);
-
-            // Fix: Request grid info after registration
-            this.ws.send('grid');
-
-            const userData = await promise;  // Wait for user data
-            clearTimeout(timeout);
-            console.log('Player registered successfully:', userData);
-            return userData;
-        } catch (error) {
-            clearTimeout(timeout);
-            this.registrationPromise = null;
-            console.error('Registration failed:', error);
-            throw error;
         }
     }
 

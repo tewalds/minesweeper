@@ -73,8 +73,8 @@ const SpawnScreen = {
                     avatar: userData.avatar,
                     color: userData.color,
                     position: {
-                        x: userData.view?.x1 || 0,
-                        y: userData.view?.y1 || 0
+                        x: userData.mouse?.x || 0,
+                        y: userData.mouse?.y || 0,
                     }
                 });
             }
@@ -116,156 +116,15 @@ const SpawnScreen = {
             // Validate and clamp coordinates
             const validPos = this.validateCoordinates(x, y);
 
-            const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-            if (isServerMode) {
-                if (!GameState.currentUser.userId) {
-                    // Register with server first
-                    const userData = await GameState.connection.registerPlayer(GameState.currentUser.username);
-                    GameState.updateFromServer(userData);
-                }
+            // Send initial view centered on spawn position
+            const viewSize = 20; // View radius. TODO: Configure based on zoom/resolution.
+            GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
 
-                // Send initial view centered on spawn position
-                const viewSize = 20; // View radius
-                GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
-            } else {
-                // Local mode
-                GameState.currentUser.x = validPos.x;
-                GameState.currentUser.y = validPos.y;
-
-                // Ensure we have all required data before proceeding
-                if (!GameState.currentUser.username ||
-                    !GameState.currentUser.avatar ||
-                    !GameState.currentUser.color ||
-                    validPos.x === null ||
-                    validPos.y === null) {
-                    throw new Error('Missing required player data');
-                }
-
-                await GameState.finalizePlayer(validPos.x, validPos.y);
-            }
-
-            // Always send a view update before showing play screen
-            const viewSize = 20; // View radius
-            if (isServerMode) {
-                GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
-            }
             await App.showScreen(App.screens.PLAY);
         } catch (error) {
             console.error('Failed to set spawn location:', error);
             alert('Failed to set spawn location. Please try again.');
         }
-    },
-
-    // Find an empty cell around a position
-    findEmptySpawnPosition: async function (targetX, targetY) {
-        // Validate target coordinates first
-        const validTarget = this.validateCoordinates(targetX, targetY);
-        targetX = validTarget.x;
-        targetY = validTarget.y;
-
-        // Get all players
-        const onlinePlayers = [];
-        for (const [userId, userData] of GameState.players.entries()) {
-            if (userData.view) {
-                onlinePlayers.push({
-                    position: {
-                        x: userData.view.x1,
-                        y: userData.view.y1
-                    }
-                });
-            }
-        }
-
-        const occupiedPositions = new Set(onlinePlayers.map(p => `${p.position.x},${p.position.y}`));
-
-        // First try immediate adjacent positions (distance 1)
-        const adjacentOffsets = [
-            { x: 0, y: -1 },  // North
-            { x: 1, y: -1 },  // Northeast
-            { x: 1, y: 0 },   // East
-            { x: 1, y: 1 },   // Southeast
-            { x: 0, y: 1 },   // South
-            { x: -1, y: 1 },  // Southwest
-            { x: -1, y: 0 },  // West
-            { x: -1, y: -1 }  // Northwest
-        ];
-
-        // Check immediate adjacent positions first
-        for (const offset of adjacentOffsets) {
-            const newX = targetX + offset.x;
-            const newY = targetY + offset.y;
-            const validPos = this.validateCoordinates(newX, newY);
-            const key = `${validPos.x},${validPos.y}`;
-
-            if (!occupiedPositions.has(key)) {
-                return validPos;
-            }
-        }
-
-        // If no immediate spots, try increasingly larger rings
-        const maxRings = 5; // Look up to 5 cells out
-        for (let ring = 2; ring <= maxRings; ring++) {
-            const positions = [];
-
-            // Generate all positions in this ring
-            for (let dx = -ring; dx <= ring; dx++) {
-                for (let dy = -ring; dy <= ring; dy++) {
-                    // Only consider positions on the ring perimeter
-                    if (Math.abs(dx) === ring || Math.abs(dy) === ring) {
-                        const newX = targetX + dx;
-                        const newY = targetY + dy;
-
-                        // Validate position is within grid bounds
-                        const validPos = this.validateCoordinates(newX, newY);
-                        const key = `${validPos.x},${validPos.y}`;
-
-                        if (!occupiedPositions.has(key)) {
-                            // Calculate Manhattan distance to target
-                            const distance = Math.abs(validPos.x - targetX) + Math.abs(validPos.y - targetY);
-                            positions.push({ pos: validPos, distance });
-                        }
-                    }
-                }
-            }
-
-            // If we found valid positions, return the closest one
-            // If multiple positions have the same distance, choose randomly among them
-            if (positions.length > 0) {
-                // Sort by distance
-                positions.sort((a, b) => a.distance - b.distance);
-                const minDistance = positions[0].distance;
-                const closestPositions = positions.filter(p => p.distance === minDistance);
-                const chosen = closestPositions[Math.floor(Math.random() * closestPositions.length)];
-                return chosen.pos;
-            }
-        }
-
-        // If still no position found, find closest valid position
-        const searchRadius = 10; // Expand search to 10 cells in each direction
-        const candidates = [];
-
-        for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-            for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-                const newX = targetX + dx;
-                const newY = targetY + dy;
-                const validPos = this.validateCoordinates(newX, newY);
-                const key = `${validPos.x},${validPos.y}`;
-
-                if (!occupiedPositions.has(key)) {
-                    const distance = Math.abs(dx) + Math.abs(dy); // Manhattan distance
-                    candidates.push({ pos: validPos, distance });
-                }
-            }
-        }
-
-        if (candidates.length > 0) {
-            // Sort by distance and get the closest position
-            candidates.sort((a, b) => a.distance - b.distance);
-            return candidates[0].pos;
-        }
-
-        // Absolute fallback: return a position one cell away from target
-        return this.validateCoordinates(targetX + 1, targetY + 1);
     },
 
     attachEventListeners: function (container) {
@@ -319,10 +178,7 @@ const SpawnScreen = {
 
                 const targetX = parseInt(playerOption.dataset.x);
                 const targetY = parseInt(playerOption.dataset.y);
-
-                // Find an empty position near the target player
-                const spawnPos = await this.findEmptySpawnPosition(targetX, targetY);
-                this.setSpawnLocation(spawnPos.x, spawnPos.y);
+                this.setSpawnLocation(targetX, targetY);
             });
         }
     }
