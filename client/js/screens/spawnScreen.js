@@ -23,12 +23,6 @@ const SpawnScreen = {
                             <button class="spawn-button" data-spawn="custom">Spawn Here</button>
                         </div>
                     </div>
-                    ${!GameState.currentUser.userId && GameStorage.loadUserData(GameState.currentUser.username, 'lastPosition') ? `
-                        <div class="spawn-option last-position">
-                            <h3>Last Position</h3>
-                            <button class="spawn-button" data-spawn="last">Use Last Position</button>
-                        </div>
-                    ` : ''}
                     <div class="spawn-option near-player">
                         <h3>Near Other Players</h3>
                         <div class="player-list">
@@ -282,17 +276,6 @@ const SpawnScreen = {
         document.querySelector('.back-button').addEventListener('click', () => {
             App.showScreen(App.screens.CUSTOMIZE);
         });
-
-        // Last position spawn
-        const lastPositionBtn = document.querySelector('.spawn-button[data-spawn="last"]');
-        if (lastPositionBtn) {
-            lastPositionBtn.addEventListener('click', async () => {
-                const savedPlayer = await MockDB.getPlayer(GameState.currentUser.username);
-                if (savedPlayer) {
-                    this.setSpawnLocation(savedPlayer.position.x, savedPlayer.position.y);
-                }
-            });
-        }
 
         // Random spawn
         const randomSpawnBtn = document.querySelector('.spawn-button[data-spawn="random"]');

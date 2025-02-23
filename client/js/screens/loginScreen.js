@@ -1,5 +1,8 @@
 const LoginScreen = {
     show: function (container) {
+        // Load previous username if exists
+        const savedUsername = GameStorage.load(GameStorage.USERNAME_KEY);
+
         const html = `
             <div class="login-screen">
                 <h1>Multiplayer Minesweeper</h1>
@@ -11,8 +14,6 @@ const LoginScreen = {
         `;
         container.innerHTML = html;
 
-        // Load previous username if exists
-        const savedUsername = GameStorage.load(GameStorage.USERNAME_KEY);
         if (savedUsername) {
             document.getElementById('username').value = savedUsername;
         }

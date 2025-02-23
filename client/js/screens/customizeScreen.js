@@ -49,25 +49,8 @@ const CustomizeScreen = {
     },
 
     loadSavedSelections: function () {
-        const username = GameState.currentUser.username;
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-
-        if (!isServerMode) {
-            // Only load saved selections in local mode
-            const savedAvatar = GameStorage.loadUserData(username, 'avatar');
-            const savedColor = GameStorage.loadUserData(username, 'color');
-
-            if (savedAvatar) {
-                document.querySelector(`[data-avatar="${savedAvatar}"]`)?.classList.add('selected');
-                document.getElementById('avatar-preview').textContent = savedAvatar;
-            }
-            if (savedColor) {
-                document.querySelector(`[data-color="${savedColor}"]`)?.classList.add('selected');
-                document.getElementById('color-preview').style.backgroundColor = savedColor;
-            }
-
-            document.getElementById('customize-done').disabled = !(savedAvatar && savedColor);
-        }
+        // No longer need to load saved selections since we're online only
+        document.getElementById('customize-done').disabled = true;
     },
 
     attachEventListeners: function (container) {
@@ -143,14 +126,10 @@ const CustomizeScreen = {
 
             const avatar = avatarOption.dataset.avatar;
             container.querySelector('#avatar-preview').textContent = avatar;
-
-            if (!isServerMode) {
-                GameStorage.saveUserData(GameState.currentUser.username, 'avatar', avatar);
-            }
             GameState.currentUser.avatar = avatar;
 
-            // Enable continue if both selected
-            continueBtn.disabled = !(avatar && GameState.currentUser.color);
+            // Enable continue if both avatar and color are selected
+            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
         });
 
         colorGrid?.addEventListener('click', (e) => {
@@ -163,41 +142,35 @@ const CustomizeScreen = {
 
             const color = colorOption.dataset.color;
             container.querySelector('#color-preview').style.backgroundColor = color;
-
-            if (!isServerMode) {
-                GameStorage.saveUserData(GameState.currentUser.username, 'color', color);
-            }
             GameState.currentUser.color = color;
 
-            // Enable continue if both selected
-            continueBtn.disabled = !(GameState.currentUser.avatar && color);
+            // Enable continue if both avatar and color are selected
+            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
         });
 
         continueBtn?.addEventListener('click', async () => {
-            if (isServerMode) {
-                try {
-                    // Get indices of selected color and avatar
-                    const colorIndex = GameState.colors.indexOf(GameState.currentUser.color);
-                    const avatarIndex = GameState.avatars.indexOf(GameState.currentUser.avatar);
+            try {
+                // Get indices of selected color and avatar
+                const colorIndex = GameState.colors.indexOf(GameState.currentUser.color);
+                const avatarIndex = GameState.avatars.indexOf(GameState.currentUser.avatar);
 
-                    console.log('Sending settings with indices:', {
-                        color: GameState.currentUser.color,
-                        colorIndex,
-                        avatar: GameState.currentUser.avatar,
-                        avatarIndex
-                    });
+                console.log('Sending settings with indices:', {
+                    color: GameState.currentUser.color,
+                    colorIndex,
+                    avatar: GameState.currentUser.avatar,
+                    avatarIndex
+                });
 
-                    if (colorIndex === -1 || avatarIndex === -1) {
-                        throw new Error("Invalid color or avatar selected");
-                    }
-
-                    // Send settings to server
-                    await GameState.connection.sendSettings(colorIndex, avatarIndex);
-                } catch (error) {
-                    console.error('Failed to send settings:', error);
-                    alert('Failed to save appearance. Please try again.');
-                    return;
+                if (colorIndex === -1 || avatarIndex === -1) {
+                    throw new Error("Invalid color or avatar selected");
                 }
+
+                // Send settings to server
+                await GameState.connection.sendSettings(colorIndex, avatarIndex);
+            } catch (error) {
+                console.error('Failed to send settings:', error);
+                alert('Failed to save appearance. Please try again.');
+                return;
             }
 
             App.showScreen(App.screens.SPAWN);

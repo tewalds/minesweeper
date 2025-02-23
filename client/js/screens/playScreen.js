@@ -1171,6 +1171,13 @@ const PlayScreen = {
         this.markerUpdateFrame = requestAnimationFrame(updateMarkers);
     },
 
+    startUpdates: function () {
+        // Update game state periodically
+        this.updateInterval = setInterval(() => {
+            this.updateGameState();
+        }, this.UPDATE_INTERVAL);
+    },
+
     stopUpdates: function () {
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
@@ -1180,7 +1187,7 @@ const PlayScreen = {
             cancelAnimationFrame(this.markerUpdateFrame);
             this.markerUpdateFrame = null;
         }
-        this.stopMovementUpdates(); // Stop movement simulation
+        this.stopMovementUpdates();
     },
 
     // Calculate zoom speed based on current zoom level
