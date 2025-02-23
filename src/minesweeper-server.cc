@@ -167,7 +167,14 @@ int main(int argc, char **argv) {
               if (command == "login") {
                 std::string name;
                 iss >> name;  // TODO password
+                name.erase(remove_if(name.begin(), name.end(), isspace), name.end());  // Remove spaces
                 name = name.substr(0, 32);
+                if (name.empty()) {
+                  if (auto s = ctx.ws_session.lock(); s) {
+                    s->send("error invalid username");
+                  }
+                  return;
+                }
                 if (usernames.find(name) != usernames.end()) {
                   userid = usernames[name];
                   users[userid].last_active =  std::chrono::system_clock::now();

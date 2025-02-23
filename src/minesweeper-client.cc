@@ -22,7 +22,7 @@
 ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(std::string, host, "localhost", "Websocket host.");
 ABSL_FLAG(int, port, 9001, "Websocket port.");
-ABSL_FLAG(std::string, name, "wsclient", "Username");
+ABSL_FLAG(std::string, name, std::getenv("USER"), "Username, default of $USER");
 
 
 struct State {
@@ -37,6 +37,13 @@ int main(int argc, char **argv) {
   absl::SetProgramUsageMessage("Minesweeper client, connect to a server and play minesweeper.\n");
   absl::ParseCommandLine(argc, argv);
 
+  std::string name = absl::GetFlag(FLAGS_name);
+  name.erase(remove_if(name.begin(), name.end(), isspace), name.end());  // Remove spaces
+  if (name.empty()) {
+    std::cerr << "Username not specified. Please set the environment variable USER or use --name option." << std::endl;
+    return 1;
+  }
+
   std::string uri = absl::StrFormat("ws://%s:%i/minefield", absl::GetFlag(FLAGS_host), absl::GetFlag(FLAGS_port));
   std::cout << "Connecting to: " << uri << std::endl;
 
@@ -46,11 +53,11 @@ int main(int argc, char **argv) {
   beauty::client client;
 
   client.ws(uri, beauty::ws_handler{
-      .on_connect = [&client](const beauty::ws_context& ctx) {
+      .on_connect = [&client, &name](const beauty::ws_context& ctx) {
         std::cout << "Connected\n";
         absl::BitGen bitgen;
-        std::cout << "Logging in as: " << absl::GetFlag(FLAGS_name) << std::endl;
-        client.ws_send(absl::StrFormat("login %s", absl::GetFlag(FLAGS_name)));
+        std::cout << "Logging in as: " << name << std::endl;
+        client.ws_send(absl::StrFormat("login %s", name));
         client.ws_send(absl::StrFormat("settings %d %d",
             absl::Uniform(bitgen, 0, 100), absl::Uniform(bitgen, 0, 100)));
       },
