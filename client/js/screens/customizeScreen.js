@@ -150,7 +150,7 @@ const CustomizeScreen = {
             GameState.currentUser.avatar = avatar;
 
             // Enable continue if both selected
-            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
+            continueBtn.disabled = !(avatar && GameState.currentUser.color);
         });
 
         colorGrid?.addEventListener('click', (e) => {
@@ -170,7 +170,7 @@ const CustomizeScreen = {
             GameState.currentUser.color = color;
 
             // Enable continue if both selected
-            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
+            continueBtn.disabled = !(GameState.currentUser.avatar && color);
         });
 
         continueBtn?.addEventListener('click', async () => {
