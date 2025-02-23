@@ -1,30 +1,6 @@
-// Base class for game connections
 class GameConnection {
     constructor() {
-        if (this.constructor === GameConnection) {
-            throw new Error("Cannot instantiate abstract GameConnection class");
-        }
-
-        // Event handlers that implementations should call
-        this.onGridInfo = (width, height, userId) => { };
-        this.onUpdate = (state, x, y, userId) => { };
-        this.onPlayerJoin = (userId, name) => { };
-        this.onReset = () => { };
-        this.onError = (error) => { };
-    }
-
-    // Core methods that both implementations must provide
-    async connect() { throw new Error("Not implemented"); }
-    async disconnect() { throw new Error("Not implemented"); }
-    async openCell(x, y) { throw new Error("Not implemented"); }
-    async markCell(x, y) { throw new Error("Not implemented"); }
-}
-
-// WebSocket implementation for real server
-class WebSocketGameConnection extends GameConnection {
-    constructor(serverUrl) {
-        super();
-        this.serverUrl = serverUrl;
+        this.serverUrl = `ws://${window.location.host}/minefield`;
         this.ws = null;
         this.connected = false;
         this.registrationPromise = null;  // Track registration completion
@@ -33,6 +9,8 @@ class WebSocketGameConnection extends GameConnection {
         this.onUpdate = (state, x, y, userId) => {
             PlayScreen.processServerUpdate({ x, y, state, userId });
         };
+        this.onGridInfo = (width, height, userId) => { };
+        this.onError = (error) => { };
     }
 
     async testConnection() {
@@ -142,12 +120,7 @@ class WebSocketGameConnection extends GameConnection {
                                 const [userId, x, y] = args.map(Number);
                                 // Update player mouse position
                                 if (GameState.players.has(userId)) {
-                                    const playerData = GameState.players.get(userId);
-                                    GameState.updatePlayer({
-                                        ...playerData,
-                                        mouse: { x, y },
-                                        userId
-                                    });
+                                    GameState.players.get(userId).mouse = { x, y };
                                 }
                                 break;
                             }

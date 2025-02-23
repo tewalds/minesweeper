@@ -59,7 +59,6 @@ const CustomizeScreen = {
         const continueBtn = container.querySelector('#customize-done');
         const settingsToggle = container.querySelector('.settings-toggle');
         const settingsDropdown = container.querySelector('.settings-dropdown');
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
 
         // Back button
         container.querySelector('.back-button')?.addEventListener('click', () => {

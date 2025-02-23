@@ -47,13 +47,8 @@ const PlayScreen = {
         this.markers.clear();
 
         // Set up WebSocket handlers
-        if (GameState.connection instanceof WebSocketGameConnection) {
+        if (GameState.connection) {
             console.log('Setting up WebSocket handlers');
-
-            GameState.connection.onUpdate = (state, x, y, userId) => {
-                console.log('Received update from server:', { state, x, y, userId });
-                this.processServerUpdate({ x, y, state, userId });
-            };
 
             // Request initial view with explicit coordinates
             const viewSize = 20; // View radius
@@ -194,8 +189,6 @@ const PlayScreen = {
 
     // Simulate a player click at a position
     simulatePlayerClick: async function (x, y, username, avatar) {
-        if (this.isRegeneratingGrid) return;
-
         try {
             const key = `${x},${y}`;
             const marker = this.markers.get(`${x},${y}`);
@@ -224,9 +217,6 @@ const PlayScreen = {
             this.updateVisibleCellStates();
         }
     },
-
-    // Track grid regeneration state
-    isRegeneratingGrid: false,
 
     // Update movement state for all players
     updatePlayerMovements: function (timestamp) {
@@ -1187,12 +1177,10 @@ const PlayScreen = {
         };
 
         // Only send view update if it changed
-        if (GameState.connection instanceof WebSocketGameConnection) {
-            const viewStr = `${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
-            if (viewStr !== this.currentView) {
-                this.currentView = viewStr;
-                GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}`);
-            }
+        const viewStr = `${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}`;
+        if (viewStr !== this.currentView) {
+            this.currentView = viewStr;
+            GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}`);
         }
 
         return bounds;
@@ -1300,7 +1288,7 @@ const PlayScreen = {
         }
 
         // Debug: Log current players
-        console.log('Current players:', [...GameState.players.entries()]);
+        // console.log('Current players:', [...GameState.players.entries()]);
 
         indicatorsContainer.innerHTML = '';
         cursorsContainer.innerHTML = '';

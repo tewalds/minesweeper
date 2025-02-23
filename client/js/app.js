@@ -13,7 +13,7 @@ const App = {
 
         try {
             // Auto-connect to local server
-            const connection = new WebSocketGameConnection(Config.SERVER.DEFAULT_URL);
+            const connection = new GameConnection();
 
             // Connect to server
             if (await connection.connect()) {

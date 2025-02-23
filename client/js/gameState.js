@@ -71,7 +71,8 @@ const GameState = {
         color: null,
         colorIndex: -1,
         score: 0,
-        view: null
+        view: null,
+        mouse: { x: 0, y: 0 }
     },
 
     // Add connection management
@@ -99,7 +100,8 @@ const GameState = {
             color: null,
             colorIndex: -1,
             score: 0,
-            view: null
+            view: null,
+            mouse: { x: 0, y: 0 }
         };
         // Clear players
         this.players.clear();

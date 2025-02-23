@@ -35,7 +35,7 @@ const SpawnScreen = {
         container.innerHTML = html;
 
         // Update player list when we get updates from server
-        if (GameState.connection instanceof WebSocketGameConnection) {
+        if (GameState.connection) {
             const updatePlayerList = async () => {
                 const playerList = container.querySelector('.player-list');
                 if (playerList) {
