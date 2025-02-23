@@ -32,7 +32,7 @@ const CustomizeScreen = {
             document.querySelector('.back-button').style.display = 'none';
         }
 
-        this.attachEventListeners();
+        this.attachEventListeners(container);
         this.loadSavedSelections();
     },
 
@@ -70,31 +70,48 @@ const CustomizeScreen = {
         }
     },
 
-    attachEventListeners: function () {
-        const avatarGrid = document.querySelector('.avatar-grid');
-        const colorGrid = document.querySelector('.color-grid');
-        const continueBtn = document.getElementById('customize-done');
+    attachEventListeners: function (container) {
+        const avatarGrid = container.querySelector('.avatar-grid');
+        const colorGrid = container.querySelector('.color-grid');
+        const continueBtn = container.querySelector('#customize-done');
+        const settingsToggle = container.querySelector('.settings-toggle');
+        const settingsDropdown = container.querySelector('.settings-dropdown');
         const isServerMode = GameState.connection instanceof WebSocketGameConnection;
 
         // Back button
-        document.querySelector('.back-button').addEventListener('click', () => {
+        container.querySelector('.back-button')?.addEventListener('click', () => {
             App.showScreen(App.screens.LOGIN);
         });
 
         // Settings toggle
-        document.querySelector('.settings-toggle').addEventListener('click', (e) => {
-            const dropdown = document.querySelector('.settings-dropdown');
-            dropdown.classList.toggle('hidden');
-            e.stopPropagation();
-        });
+        if (settingsToggle && settingsDropdown) {
+            settingsToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                settingsDropdown.classList.toggle('hidden');
+            });
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', () => {
-            document.querySelector('.settings-dropdown').classList.add('hidden');
-        });
+            // Close dropdown when clicking outside
+            const closeDropdown = (e) => {
+                if (!settingsDropdown.contains(e.target) && !settingsToggle.contains(e.target)) {
+                    settingsDropdown.classList.add('hidden');
+                }
+            };
+            document.addEventListener('click', closeDropdown);
+
+            // Clean up when screen changes
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (!document.contains(container)) {
+                        document.removeEventListener('click', closeDropdown);
+                        observer.disconnect();
+                    }
+                });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
 
         // Logout button
-        document.querySelector('.logout-button').addEventListener('click', () => {
+        container.querySelector('.logout-button')?.addEventListener('click', () => {
             // Disconnect from server/clear connection
             GameState.disconnect();
 
@@ -116,16 +133,16 @@ const CustomizeScreen = {
             App.showScreen(App.screens.CONNECTION);
         });
 
-        avatarGrid.addEventListener('click', (e) => {
+        avatarGrid?.addEventListener('click', (e) => {
             const avatarOption = e.target.closest('.avatar-option');
             if (!avatarOption) return;
 
             // Update selection
-            document.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
+            container.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
             avatarOption.classList.add('selected');
 
             const avatar = avatarOption.dataset.avatar;
-            document.getElementById('avatar-preview').textContent = avatar;
+            container.querySelector('#avatar-preview').textContent = avatar;
 
             if (!isServerMode) {
                 GameStorage.saveUserData(GameState.currentUser.username, 'avatar', avatar);
@@ -136,16 +153,16 @@ const CustomizeScreen = {
             continueBtn.disabled = !GameState.currentUser.color;
         });
 
-        colorGrid.addEventListener('click', (e) => {
+        colorGrid?.addEventListener('click', (e) => {
             const colorOption = e.target.closest('.color-option');
             if (!colorOption) return;
 
             // Update selection
-            document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('selected'));
+            container.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('selected'));
             colorOption.classList.add('selected');
 
             const color = colorOption.dataset.color;
-            document.getElementById('color-preview').style.backgroundColor = color;
+            container.querySelector('#color-preview').style.backgroundColor = color;
 
             if (!isServerMode) {
                 GameStorage.saveUserData(GameState.currentUser.username, 'color', color);
@@ -156,7 +173,7 @@ const CustomizeScreen = {
             continueBtn.disabled = !GameState.currentUser.avatar;
         });
 
-        continueBtn.addEventListener('click', () => {
+        continueBtn?.addEventListener('click', () => {
             App.showScreen(App.screens.SPAWN);
         });
     }
