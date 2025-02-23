@@ -160,12 +160,20 @@ const GameState = {
                 avatar = this.avatars[userData.avatar];
             }
 
+            // Update or create player data
+            const existingPlayer = this.players.get(userData.userId) || {};
             this.players.set(userData.userId, {
+                ...existingPlayer,
                 ...userData,
                 color,
                 avatar,
-                lastActive: Date.now()
+                // Preserve mouse position if not in update
+                mouse: userData.mouse || existingPlayer.mouse
             });
+
+            // Debug: Log player update
+            console.log('Updated player data:', this.players.get(userData.userId));
+
             this.emit('playersUpdated');
         }
     }

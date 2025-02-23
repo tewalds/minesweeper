@@ -81,12 +81,11 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'update': {
                                 const [state, x, y, userId] = args.map(Number);
-                                console.log('Parsed update message:', { state, x, y, userId });
                                 this.onUpdate(state, x, y, userId);
                                 break;
                             }
                             case 'user': {
-                                const [userId, name, colorIndex, avatarIndex, score, viewX1, viewY1, viewX2, viewY2] = args;
+                                const [userId, name, colorIndex, avatarIndex, score, viewX1, viewY1, viewX2, viewY2, lastActiveSeconds] = args;
                                 const userData = {
                                     userId: parseInt(userId),
                                     name,
@@ -98,7 +97,9 @@ class WebSocketGameConnection extends GameConnection {
                                         y1: parseInt(viewY1),
                                         x2: parseInt(viewX2),
                                         y2: parseInt(viewY2)
-                                    }
+                                    },
+                                    // Convert server seconds to local timestamp
+                                    lastActive: Date.now() - (parseInt(lastActiveSeconds) * 1000)
                                 };
 
                                 if (userData.userId === this.userId) {
@@ -141,6 +142,19 @@ class WebSocketGameConnection extends GameConnection {
                                         score: (GameState.currentUser.score || 0) + score
                                     };
                                     GameState.updateFromServer(userData);
+                                }
+                                break;
+                            }
+                            case 'mouse': {
+                                const [userId, x, y] = args.map(Number);
+                                // Update player mouse position
+                                if (GameState.players.has(userId)) {
+                                    const playerData = GameState.players.get(userId);
+                                    GameState.updatePlayer({
+                                        ...playerData,
+                                        mouse: { x, y },
+                                        userId
+                                    });
                                 }
                                 break;
                             }

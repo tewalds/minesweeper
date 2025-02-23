@@ -448,6 +448,18 @@ const PlayScreen = {
         `;
         container.innerHTML = html;
 
+        // Debug: Check if containers exist
+        const indicatorsContainer = document.querySelector('.player-indicators');
+        const cursorsContainer = document.querySelector('.player-cursors');
+        console.log('Containers:', {
+            indicators: indicatorsContainer,
+            cursors: cursorsContainer,
+            styles: {
+                indicators: indicatorsContainer?.getBoundingClientRect(),
+                cursors: cursorsContainer?.getBoundingClientRect()
+            }
+        });
+
         // Initialize game grid
         await this.initializeGrid();
         console.log('PlayScreen - Grid initialized');
@@ -525,7 +537,7 @@ const PlayScreen = {
     },
 
     // Calculate if a player is visible in the current viewport
-    isPlayerVisible: function (playerX, playerY, container) {
+    isPlayerVisible: function (x, y, container) {
         if (!container) return false;
 
         const bounds = this.getVisibleBounds(container);
@@ -533,10 +545,16 @@ const PlayScreen = {
 
         // Add a small margin to the bounds
         const margin = 2;
-        return playerX >= bounds.left - margin &&
-            playerX <= bounds.right + margin &&
-            playerY >= bounds.top - margin &&
-            playerY <= bounds.bottom + margin;
+        // x and y are already relative to grid center, so we need to add center back
+        const gridCenterX = Math.floor(this.gridWidth / 2);
+        const gridCenterY = Math.floor(this.gridHeight / 2);
+        const absX = x + gridCenterX;
+        const absY = y + gridCenterY;
+
+        return absX >= bounds.left - margin &&
+            absX <= bounds.right + margin &&
+            absY >= bounds.top - margin &&
+            absY <= bounds.bottom + margin;
     },
 
     // Calculate screen position for a player
@@ -544,10 +562,14 @@ const PlayScreen = {
         if (!container) return null;
 
         const rect = container.getBoundingClientRect();
+        const gridCenterX = Math.floor(this.gridWidth / 2);
+        const gridCenterY = Math.floor(this.gridHeight / 2);
+        const absX = x + gridCenterX;
+        const absY = y + gridCenterY;
 
         // Convert grid coordinates to screen coordinates
-        const screenX = this.offsetX + (x * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_X * this.zoom);
-        const screenY = this.offsetY + (y * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_Y * this.zoom);
+        const screenX = this.offsetX + (absX * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_X * this.zoom);
+        const screenY = this.offsetY + (absY * this.CELL_SIZE * this.zoom) + (this.CURSOR_OFFSET_Y * this.zoom);
 
         return {
             x: screenX,
@@ -611,13 +633,6 @@ const PlayScreen = {
 
         const arrows = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗', '→'];
         return arrows[sector];
-    },
-
-    renderPlayers: async function () {
-        if (!this.cachedPlayerData) {
-            this.cachedPlayerData = await MockDB.getOnlinePlayers();
-        }
-        await this.renderPlayerMarkers(this.cachedPlayerData);
     },
 
     renderMinesweeperState: async function () {
@@ -1115,9 +1130,8 @@ const PlayScreen = {
             // Check if enough time has passed since last update
             if (timestamp - this.lastMarkerUpdate >= this.MARKER_UPDATE_INTERVAL) {
                 this.lastMarkerUpdate = timestamp;
-                if (this.cachedPlayerData) {
-                    await this.renderPlayerMarkers(this.cachedPlayerData);
-                }
+                // Use GameState.players directly instead of cached data
+                await this.renderPlayerMarkers();
             }
 
             this.markerUpdateFrame = requestAnimationFrame(updateMarkers);
@@ -1277,7 +1291,7 @@ const PlayScreen = {
     },
 
     // New method specifically for rendering markers
-    renderPlayerMarkers: async function (players) {
+    renderPlayerMarkers: async function () {
         const indicatorsContainer = document.querySelector('.player-indicators');
         const cursorsContainer = document.querySelector('.player-cursors');
         const container = document.querySelector('.game-container');
@@ -1286,48 +1300,31 @@ const PlayScreen = {
             return;
         }
 
+        // Debug: Log current players
+        console.log('Current players:', [...GameState.players.entries()]);
+
         indicatorsContainer.innerHTML = '';
         cursorsContainer.innerHTML = '';
 
-        // Get current viewport center in grid coordinates
-        const rect = container.getBoundingClientRect();
+        // Calculate grid center offset
         const gridCenterX = Math.floor(this.gridWidth / 2);
         const gridCenterY = Math.floor(this.gridHeight / 2);
-        const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE - gridCenterX;
-        const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE - gridCenterY;
 
-        // Create and position indicators/cursors for each player
-        players.forEach(player => {
-            if (player.username === GameState.currentUser.username) return;
-
-            // Get player data from GameState
-            let playerData = null;
-            for (const [userId, userData] of GameState.players.entries()) {
-                if (userData.name === player.username) {
-                    playerData = userData;
-                    break;
-                }
+        // Process each player from GameState
+        for (const [userId, playerData] of GameState.players.entries()) {
+            // Skip current user and inactive players (no view data)
+            if (userId === GameState.currentUser.userId || !playerData.view) {
+                continue;
             }
-            if (!playerData) return;
 
-            // Get simulated position if available, otherwise use static position
-            const movement = this.playerMovements.get(player.username);
-            const x = movement ? movement.currentX : player.position.x;
-            const y = movement ? movement.currentY : player.position.y;
+            // Calculate player position - prefer mouse position if available
+            // Adjust coordinates to be relative to grid center
+            const viewCenterX = (playerData.view.x1 + playerData.view.x2) / 2 - gridCenterX;
+            const viewCenterY = (playerData.view.y1 + playerData.view.y2) / 2 - gridCenterY;
+            const x = playerData.mouse ? playerData.mouse.x - gridCenterX : viewCenterX;
+            const y = playerData.mouse ? playerData.mouse.y - gridCenterY : viewCenterY;
 
-            // Calculate distance from viewport center
-            const dx = x - viewportCenterX;
-            const dy = y - viewportCenterY;
-            const distance = Math.hypot(dx, dy);
-
-            // Calculate opacity based on distance (fade out between 50 and 100 tiles)
-            const opacity = distance >= 100 ? 0 :
-                distance <= 50 ? 1 :
-                    (100 - distance) / 50;
-
-            // Skip rendering if completely invisible
-            if (opacity === 0) return;
-
+            // Check if player is visible in current viewport
             const isVisible = this.isPlayerVisible(x, y, container);
             const screenPos = this.calculatePlayerScreenPosition(x, y, container);
 
@@ -1338,44 +1335,40 @@ const PlayScreen = {
                 cursor.style.left = `${screenPos.x}px`;
                 cursor.style.top = `${screenPos.y}px`;
                 cursor.style.color = playerData.color;
-                cursor.style.opacity = opacity;
 
                 cursor.innerHTML = `
                     <div class="cursor-pointer"></div>
                     <div class="cursor-info">
                         <span class="cursor-avatar">${playerData.avatar}</span>
-                        <span class="cursor-name">${playerData.username}</span>
+                        <span class="cursor-name">${playerData.name}</span>
                         <span class="cursor-score">${playerData.score || 0}</span>
                     </div>
                 `;
 
                 cursorsContainer.appendChild(cursor);
             } else {
-                // Player is off screen, show indicator
+                // Player is off screen, show edge indicator
                 const angle = this.getPlayerDirection(x, y);
                 const arrow = this.getDirectionArrow(angle);
+                const edgePos = this.calculateEdgePosition(angle, container);
 
                 const indicator = document.createElement('div');
                 indicator.className = 'player-indicator';
                 indicator.style.color = playerData.color;
-                indicator.style.opacity = opacity;
+                indicator.style.left = `${edgePos.x}px`;
+                indicator.style.top = `${edgePos.y}px`;
+                indicator.style.transform = `rotate(${edgePos.angle}rad)`;
 
                 indicator.innerHTML = `
                     <span class="indicator-arrow">${arrow}</span>
                     <span class="indicator-avatar">${playerData.avatar}</span>
-                    <span class="indicator-name">${playerData.username}</span>
+                    <span class="indicator-name">${playerData.name}</span>
                     <span class="indicator-score">${playerData.score || 0}</span>
                 `;
 
-                // Position indicator along screen edge
-                const indicatorPos = this.calculateIndicatorPosition(angle, container);
-                indicator.style.left = `${indicatorPos.x}px`;
-                indicator.style.top = `${indicatorPos.y}px`;
-                indicator.style.transform = `rotate(${angle}rad)`;
-
                 indicatorsContainer.appendChild(indicator);
             }
-        });
+        }
     },
 
     // Handle AI actions
