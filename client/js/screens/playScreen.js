@@ -94,28 +94,55 @@ const PlayScreen = {
     },
 
     // Update cell state
-    updateCellState: function (x, y, state) {
+    updateCell: function (x, y, state) {
         const key = `${x},${y}`;
 
-        if (state >= 0 && state <= 8) {
-            // Revealed cell with N adjacent mines
+        // States from server:
+        // 0-8: Revealed cell with N adjacent mines
+        // 9: Revealed mine
+        // 10: Hidden cell
+        // 11: Marked/flagged cell
+        if (state >= 0 && state <= 8) { // Revealed cell with N adjacent mines
+            this.revealed.add(key);
+            this.markers.delete(key); // Remove any flags
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell revealed';
+                if (state === 0) {
+                    cell.classList.add('empty');
+                    cell.textContent = '';
+                } else {
+                    cell.classList.add(`adjacent-${state}`);
+                    cell.textContent = state.toString();
+                }
+            }
+        } else if (state === 9) { // BOMB
             this.revealed.add(key);
             this.markers.delete(key);
-        } else if (state === 9) {
-            // Revealed mine
-            this.revealed.add(key);
-            this.markers.delete(key);
-        } else if (state === 10) {
-            // Hidden cell
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell revealed mine';
+                cell.textContent = '💣';
+            }
+        } else if (state === 10) { // HIDDEN
             this.revealed.delete(key);
             this.markers.delete(key);
-        } else if (state === 11) {
-            // Marked/flagged cell
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell';
+                cell.textContent = '';
+            }
+        } else if (state === 11) { // MARKED
             this.revealed.delete(key);
             this.markers.set(key, {
                 username: GameState.currentUser.username,
                 avatar: '🚩'
             });
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell';
+                cell.textContent = '🚩';
+            }
         }
     },
 
@@ -489,58 +516,6 @@ const PlayScreen = {
         if (container && grid) {
             this.updateVisibleCells(container, grid);
             console.log('Initial visible cells updated');
-        }
-    },
-
-    updateCell: function (x, y, state) {
-        const key = `${x},${y}`;
-
-        // States from server:
-        // 0-8: Revealed cell with N adjacent mines
-        // 9: Revealed mine
-        // 10: Hidden cell
-        // 11: Marked/flagged cell
-        if (state >= 0 && state <= 8) { // Revealed cell with N adjacent mines
-            this.revealed.add(key);
-            this.markers.delete(key); // Remove any flags
-            const cell = this.visibleCells.get(key);
-            if (cell) {
-                cell.className = 'grid-cell revealed';
-                if (state === 0) {
-                    cell.classList.add('empty');
-                    cell.textContent = '';
-                } else {
-                    cell.classList.add(`adjacent-${state}`);
-                    cell.textContent = state.toString();
-                }
-            }
-        } else if (state === 9) { // BOMB
-            this.revealed.add(key);
-            this.markers.delete(key);
-            const cell = this.visibleCells.get(key);
-            if (cell) {
-                cell.className = 'grid-cell revealed mine';
-                cell.textContent = '💣';
-            }
-        } else if (state === 10) { // HIDDEN
-            this.revealed.delete(key);
-            this.markers.delete(key);
-            const cell = this.visibleCells.get(key);
-            if (cell) {
-                cell.className = 'grid-cell';
-                cell.textContent = '';
-            }
-        } else if (state === 11) { // MARKED
-            this.revealed.delete(key);
-            this.markers.set(key, {
-                username: GameState.currentUser.username,
-                avatar: '🚩'
-            });
-            const cell = this.visibleCells.get(key);
-            if (cell) {
-                cell.className = 'grid-cell';
-                cell.textContent = '🚩';
-            }
         }
     },
 
@@ -1485,24 +1460,16 @@ const PlayScreen = {
         if (!update) return;
 
         const key = `${update.x},${update.y}`;
+        console.log('Processing server update:', {
+            x: update.x,
+            y: update.y,
+            originalState: update.state,
+            normalizedState: update.state % 13,
+            key
+        });
 
         // Update local state
-        if (update.state >= 0 && update.state <= 8) {
-            this.revealed.add(key);
-            this.markers.delete(key);
-        } else if (update.state === 9) {
-            this.revealed.add(key);
-            this.markers.delete(key);
-        } else if (update.state === 10) {
-            this.revealed.delete(key);
-            this.markers.delete(key);
-        } else if (update.state === 11) {
-            this.revealed.delete(key);
-            this.markers.set(key, {
-                username: GameState.currentUser.username,
-                avatar: '🚩'
-            });
-        }
+        this.updateCell(update.x, update.y, update.state);
 
         // Update visible cells
         const grid = document.querySelector('.game-grid');

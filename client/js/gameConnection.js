@@ -78,8 +78,9 @@ class WebSocketGameConnection extends GameConnection {
                                 break;
                             }
                             case 'update': {
-                                const [state, x, y, updateUserId] = args.map(Number);
-                                this.onUpdate(state, x, y, updateUserId);
+                                const [state, x, y, userId] = args.map(Number);
+                                console.log('Received cell update:', { state, x, y, userId });
+                                this.onUpdate(state, x, y, userId);
                                 break;
                             }
                             case 'user': {
@@ -150,7 +151,7 @@ class WebSocketGameConnection extends GameConnection {
                     clearTimeout(timeout);
                     this.connected = true;
                     console.log(`Connected to ${this.serverUrl}`);
-                    // Request initial grid state
+                    // Fix: Request initial grid state after connection
                     this.ws.send('grid');
                     resolve(true);
                 };
@@ -231,6 +232,10 @@ class WebSocketGameConnection extends GameConnection {
 
             console.log('Registering player:', name, colorIndex, avatarIndex);
             this.ws.send(`register ${name} ${colorIndex} ${avatarIndex}`);
+
+            // Fix: Request grid info after registration
+            this.ws.send('grid');
+
             const userData = await promise;  // Wait for user data
             clearTimeout(timeout);
             console.log('Player registered successfully:', userData);
