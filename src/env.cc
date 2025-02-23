@@ -58,6 +58,13 @@ std::vector<Update> Env::step(Action action) {
           state_[n].marked_ += 1;
         }
         updates.push_back({MARKED, a.point, a.user});
+      } else if (cell.complete()) {
+        // All non-bombs are opened, so mark all remaining hidden.
+        for (Pointi n : Neighbors(a.point, dims_, false)) {
+          if (state_[n].state_ == HIDDEN) {
+            q.push_back({MARK, n, a.user});
+          }
+        }
       }
     } else if (a.action == UNMARK) {
       if (cell.state_ == MARKED) {
