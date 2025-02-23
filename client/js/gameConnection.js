@@ -165,9 +165,11 @@ class WebSocketGameConnection extends GameConnection {
                                         this.loginPromise.resolve(userData);
                                         this.loginPromise = null;
                                     }
+                                    GameState.updateFromServer(userData);
+                                } else {
+                                    GameState.updatePlayer(userData);
                                 }
 
-                                this.onPlayerJoin(userData.userId, userData.name);
                                 break;
                             }
                             case 'userid': {

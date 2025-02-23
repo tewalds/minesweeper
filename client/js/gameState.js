@@ -32,6 +32,37 @@ const GameState = {
         '#6600FF', '#7519FF', '#8533FF', '#944DFF', '#A366FF', '#B380FF', '#C299FF', '#D1B2FF', '#E0CCFF', '#F0E5FF'
     ],
 
+    // Event handling
+    eventListeners: new Map(),
+
+    on: function (event, callback) {
+        if (!this.eventListeners.has(event)) {
+            this.eventListeners.set(event, new Set());
+        }
+        this.eventListeners.get(event).add(callback);
+    },
+
+    off: function (event, callback) {
+        if (this.eventListeners.has(event)) {
+            this.eventListeners.get(event).delete(callback);
+        }
+    },
+
+    emit: function (event, data) {
+        if (this.eventListeners.has(event)) {
+            this.eventListeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Error in ${event} event handler:`, error);
+                }
+            });
+        }
+    },
+
+    // Track all players
+    players: new Map(),
+
     currentUser: {
         username: null,
         userId: null,
@@ -66,6 +97,9 @@ const GameState = {
             score: 0,
             view: null
         };
+        // Clear players
+        this.players.clear();
+        this.emit('playersUpdated');
     },
 
     init: async function () {
@@ -93,8 +127,26 @@ const GameState = {
         this.currentUser.score = userData.score;
         this.currentUser.view = userData.view;
 
+        // Update players map
+        this.players.set(userData.userId, {
+            ...userData,
+            lastActive: Date.now()
+        });
+        this.emit('playersUpdated');
+
         // Save userid for future logins
         GameStorage.save(GameStorage.USERID_KEY, userData.userId);
+    },
+
+    // Update other player data
+    updatePlayer: function (userData) {
+        if (userData.userId !== this.currentUser.userId) {
+            this.players.set(userData.userId, {
+                ...userData,
+                lastActive: Date.now()
+            });
+            this.emit('playersUpdated');
+        }
     },
 
     // Only used in local mode now

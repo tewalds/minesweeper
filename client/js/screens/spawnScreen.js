@@ -1,8 +1,5 @@
 const SpawnScreen = {
-    show: async function (container) {
-        const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        const savedPlayer = isServerMode ? null : await MockDB.getPlayer(GameState.currentUser.username);
-
+    show: function (container) {
         const html = `
             <div class="spawn-screen">
                 <div class="screen-header">
@@ -14,43 +11,101 @@ const SpawnScreen = {
                     </div>
                 </div>
                 <div class="spawn-options">
-                    ${!isServerMode && savedPlayer ? `
-                    <div class="spawn-method">
-                        <h3>Last Position</h3>
-                        <button id="last-position">Return to (${savedPlayer.position.x}, ${savedPlayer.position.y})</button>
+                    <div class="spawn-option random-spawn">
+                        <h3>Random Location</h3>
+                        <button class="spawn-button" data-spawn="random">Spawn Randomly</button>
                     </div>
-                    ` : ''}
-                    <div class="spawn-method">
-                        <button id="random-spawn">Random Location</button>
-                    </div>
-                    
-                    <div class="spawn-method">
-                        <h3>Specific Coordinates</h3>
+                    <div class="spawn-option custom-spawn">
+                        <h3>Custom Location</h3>
                         <div class="coordinate-inputs">
-                            <input type="number" id="spawn-x" placeholder="X coordinate" value="0">
-                            <input type="number" id="spawn-y" placeholder="Y coordinate" value="0">
-                            <button id="coordinate-spawn">Spawn Here</button>
+                            <input type="number" id="spawn-x" placeholder="X coordinate" min="0" value="0">
+                            <input type="number" id="spawn-y" placeholder="Y coordinate" min="0" value="0">
+                            <button class="spawn-button" data-spawn="custom">Spawn Here</button>
                         </div>
                     </div>
-
-                    <div class="spawn-method">
-                        <h3>Spawn Near Player</h3>
-                        <div class="online-players">
-                            ${await this.createPlayerList()}
+                    ${!GameState.currentUser.userId && GameStorage.loadUserData(GameState.currentUser.username, 'lastPosition') ? `
+                        <div class="spawn-option last-position">
+                            <h3>Last Position</h3>
+                            <button class="spawn-button" data-spawn="last">Use Last Position</button>
+                        </div>
+                    ` : ''}
+                    <div class="spawn-option near-player">
+                        <h3>Near Other Players</h3>
+                        <div class="player-list">
+                            ${this.createPlayerList()}
                         </div>
                     </div>
                 </div>
             </div>
         `;
         container.innerHTML = html;
-        this.attachEventListeners();
+
+        // Update player list when we get updates from server
+        if (GameState.connection instanceof WebSocketGameConnection) {
+            console.log('Setting up player list update handler');
+            const updatePlayerList = async () => {
+                console.log('Updating player list');
+                const playerList = container.querySelector('.player-list');
+                if (playerList) {
+                    playerList.innerHTML = await this.createPlayerList();
+                }
+            };
+
+            // Update when we get player updates
+            GameState.on('playersUpdated', updatePlayerList);
+
+            // Clean up when screen changes
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (!document.contains(container)) {
+                        GameState.off('playersUpdated', updatePlayerList);
+                        observer.disconnect();
+                    }
+                });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+
+        this.attachEventListeners(container);
     },
 
     createPlayerList: async function () {
         const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+        console.log('Creating player list, server mode:', isServerMode);
+
         if (isServerMode) {
-            // TODO: Get player list from server
-            return '<div class="no-players">Waiting for player list from server...</div>';
+            // Get list of active players from server's user data
+            const onlinePlayers = [];
+            const now = Date.now();
+            const timeLimit = now - (60 * 1000); // Players active in last minute
+
+            // Filter and format player data
+            for (const [userId, userData] of GameState.players.entries()) {
+                console.log('Processing player:', userData);
+                if (userData.lastActive > timeLimit && userData.userId !== GameState.currentUser.userId) {
+                    onlinePlayers.push({
+                        username: userData.name,
+                        avatar: userData.avatar,
+                        color: userData.color,
+                        position: {
+                            x: userData.view?.x1 || 0,
+                            y: userData.view?.y1 || 0
+                        }
+                    });
+                }
+            }
+
+            if (onlinePlayers.length === 0) {
+                return '<div class="no-players">No other players online</div>';
+            }
+
+            return onlinePlayers.map(player => `
+                <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
+                    <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
+                    <span class="player-name">${player.username}</span>
+                    <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
+                </div>
+            `).join('');
         } else {
             const onlinePlayers = await MockDB.getOnlinePlayers();
             // Filter out current user from the list
@@ -104,7 +159,6 @@ const SpawnScreen = {
                 // Send initial view centered on spawn position
                 const viewSize = 20; // View radius
                 GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
-                await App.showScreen(App.screens.PLAY);
             } else {
                 // Local mode
                 GameState.currentUser.x = validPos.x;
@@ -120,8 +174,14 @@ const SpawnScreen = {
                 }
 
                 await GameState.finalizePlayer(validPos.x, validPos.y);
-                await App.showScreen(App.screens.PLAY);
             }
+
+            // Always send a view update before showing play screen
+            const viewSize = 20; // View radius
+            if (isServerMode) {
+                GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
+            }
+            await App.showScreen(App.screens.PLAY);
         } catch (error) {
             console.error('Failed to set spawn location:', error);
             alert('Failed to set spawn location. Please try again.');
@@ -229,14 +289,14 @@ const SpawnScreen = {
         return this.validateCoordinates(targetX + 1, targetY + 1);
     },
 
-    attachEventListeners: function () {
+    attachEventListeners: function (container) {
         // Back button
         document.querySelector('.back-button').addEventListener('click', () => {
             App.showScreen(App.screens.CUSTOMIZE);
         });
 
         // Last position spawn
-        const lastPositionBtn = document.getElementById('last-position');
+        const lastPositionBtn = document.querySelector('.spawn-button[data-spawn="last"]');
         if (lastPositionBtn) {
             lastPositionBtn.addEventListener('click', async () => {
                 const savedPlayer = await MockDB.getPlayer(GameState.currentUser.username);
@@ -247,37 +307,60 @@ const SpawnScreen = {
         }
 
         // Random spawn
-        document.getElementById('random-spawn').addEventListener('click', () => {
-            const gridCenterX = Math.floor(MinesweeperDB.gridWidth / 2);
-            const gridCenterY = Math.floor(MinesweeperDB.gridHeight / 2);
-            const x = Math.floor(Math.random() * MinesweeperDB.gridWidth) - gridCenterX;
-            const y = Math.floor(Math.random() * MinesweeperDB.gridHeight) - gridCenterY;
-            this.setSpawnLocation(x, y);
-        });
+        const randomSpawnBtn = document.querySelector('.spawn-button[data-spawn="random"]');
+        if (randomSpawnBtn) {
+            randomSpawnBtn.addEventListener('click', () => {
+                let gridWidth, gridHeight;
+                const isServerMode = GameState.connection instanceof WebSocketGameConnection;
 
-        // Coordinate spawn
-        document.getElementById('coordinate-spawn').addEventListener('click', () => {
-            const x = parseInt(document.getElementById('spawn-x').value);
-            const y = parseInt(document.getElementById('spawn-y').value);
+                if (isServerMode && GameState.connection.gridInfo) {
+                    gridWidth = GameState.connection.gridInfo.width;
+                    gridHeight = GameState.connection.gridInfo.height;
+                } else {
+                    gridWidth = MinesweeperDB.gridWidth;
+                    gridHeight = MinesweeperDB.gridHeight;
+                }
 
-            if (isNaN(x) || isNaN(y)) {
-                alert('Please enter valid coordinates');
-                return;
-            }
-            this.setSpawnLocation(x, y);
-        });
+                const gridCenterX = Math.floor(gridWidth / 2);
+                const gridCenterY = Math.floor(gridHeight / 2);
+                const x = Math.floor(Math.random() * gridWidth) - gridCenterX;
+                const y = Math.floor(Math.random() * gridHeight) - gridCenterY;
+                this.setSpawnLocation(x, y);
+            });
+        }
+
+        // Custom coordinate spawn
+        const customSpawnBtn = document.querySelector('.spawn-button[data-spawn="custom"]');
+        if (customSpawnBtn) {
+            customSpawnBtn.addEventListener('click', () => {
+                const xInput = document.getElementById('spawn-x');
+                const yInput = document.getElementById('spawn-y');
+                const x = parseInt(xInput.value);
+                const y = parseInt(yInput.value);
+
+                if (isNaN(x) || isNaN(y)) {
+                    alert('Please enter valid X and Y coordinates');
+                    return;
+                }
+
+                this.setSpawnLocation(x, y);
+            });
+        }
 
         // Player spawn
-        document.querySelector('.online-players').addEventListener('click', async (e) => {
-            const playerOption = e.target.closest('.player-option');
-            if (!playerOption) return;
+        const playerList = container.querySelector('.player-list');
+        if (playerList) {
+            playerList.addEventListener('click', async (e) => {
+                const playerOption = e.target.closest('.player-option');
+                if (!playerOption) return;
 
-            const targetX = parseInt(playerOption.dataset.x);
-            const targetY = parseInt(playerOption.dataset.y);
+                const targetX = parseInt(playerOption.dataset.x);
+                const targetY = parseInt(playerOption.dataset.y);
 
-            // Find an empty position near the target player
-            const spawnPos = await this.findEmptySpawnPosition(targetX, targetY);
-            this.setSpawnLocation(spawnPos.x, spawnPos.y);
-        });
+                // Find an empty position near the target player
+                const spawnPos = await this.findEmptySpawnPosition(targetX, targetY);
+                this.setSpawnLocation(spawnPos.x, spawnPos.y);
+            });
+        }
     }
 }; 
