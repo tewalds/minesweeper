@@ -23,7 +23,6 @@
 ABSL_FLAG(std::string, host, "localhost", "Websocket host.");
 ABSL_FLAG(int, port, 9001, "Websocket port.");
 ABSL_FLAG(std::string, name, "wsagent", "Username");
-ABSL_FLAG(int, userid, 0, "User to join as. 0 is new user.");
 ABSL_FLAG(float, sleep, 0.001, "How long to sleep (in seconds) between actions.");
 
 
@@ -76,17 +75,12 @@ int main(int argc, char **argv) {
 
   client.ws(uri, beauty::ws_handler{
       .on_connect = [&client](const beauty::ws_context& ctx) {
-        int userid = absl::GetFlag(FLAGS_userid);
         std::cout << "Connected\n";
-        if (userid == 0) {
-          absl::BitGen bitgen;
-          std::cout << "Registering user...\n";
-          client.ws_send(absl::StrFormat("register %s %i %i", absl::GetFlag(FLAGS_name),
-              absl::Uniform(bitgen, 0, 100), absl::Uniform(bitgen, 0, 100)));
-        } else {
-          std::cout << "Logging in user...\n";
-          client.ws_send(absl::StrFormat("login %i", userid));
-        }
+        absl::BitGen bitgen;
+        std::cout << "Logging in as: " << absl::GetFlag(FLAGS_name) << std::endl;
+        client.ws_send(absl::StrFormat("login %s", absl::GetFlag(FLAGS_name)));
+        client.ws_send(absl::StrFormat("settings %d %d",
+            absl::Uniform(bitgen, 0, 100), absl::Uniform(bitgen, 0, 100)));
       },
       .on_receive = [&state, &ping_pong](const beauty::ws_context& ctx, const char* data, std::size_t size, bool is_text) {
         assert(is_text);

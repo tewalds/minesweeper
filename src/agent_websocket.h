@@ -57,6 +57,7 @@ class AgentWebSocket : public Agent {
   beauty::server server_;
   absl::flat_hash_map<std::string, ClientInfo> clients_;  // uuid -> client info
   absl::flat_hash_map<int, User> users_;  // userid -> User
+  absl::flat_hash_map<std::string, int> usernames_;  // username -> userid
   int next_userid_;
   MutexProtected<std::queue<Action>> actions_;
 

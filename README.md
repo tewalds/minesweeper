@@ -60,3 +60,4 @@ latest versions of python or pygame, and is obviously much slower, and now less 
 - Support reset (Alex)
 - Drag-to-scroll (Alex)
 - How to deploy (Timo)
+- Sanitize input (Timo)

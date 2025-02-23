@@ -207,52 +207,46 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
   }
 
   if (userid == 0) {
-    if (command == "register") {
+    if (command == "login") {
       std::string name;
-      int color, emoji;
-      iss >> name >> color >> emoji;
-      userid = next_userid_++;
+      iss >> name;  // TODO password
       name = name.substr(0, 32);
-      clients_[ctx.uuid].userid = userid;
-      users_[userid] = User{
-        .userid = userid,
-        .name = name,
-        .color = color,
-        .emoji = emoji,
-        .score = 0,
-        .view = Recti(),
-        .mouse = Pointf(),
-        .last_active = std::chrono::system_clock::now(),
-      };
-      std::cout << absl::StrFormat("New user id: %i, name: %s\n", userid, name);
-    } else if (command == "login") {
-      iss >> userid;
-      // TODO: check a password
-      // TODO: Only allow one connection per user?
-      if (users_.find(userid) != users_.end()) {
-        clients_[ctx.uuid].userid = userid;
+      if (usernames_.find(name) != usernames_.end()) {
+        userid = usernames_[name];
         users_[userid].last_active =  std::chrono::system_clock::now();
       } else {
-        if (auto s = ctx.ws_session.lock(); s) {
-          s->send("error login failed");
+        userid = next_userid_++;
+        usernames_[name] = userid;
+        users_[userid] = User{
+          .userid = userid,
+          .name = name,
+          .color = -1,
+          .emoji = -1,
+          .score = 0,
+          .view = Recti(),
+          .mouse = Pointf(),
+          .last_active = std::chrono::system_clock::now(),
+        };
+        std::cout << absl::StrFormat("New user id: %i, name: %s\n", userid, name);
+      }
+      // TODO: Make sure there's only one connection per user.
+      clients_[ctx.uuid].userid = userid;
+      if (auto s = ctx.ws_session.lock(); s) {
+        s->send(absl::StrFormat("userid %d", userid));
+        // Send a list of "active" users. Only connected users? Is 7 days too long?
+        send_users(s, std::chrono::days(7));
+      }
+      // Broadcast that you joined.
+      for (auto& [_, client] : clients_) {
+        if (client.userid != userid) {
+          if (auto s = client.session.lock(); s) {
+            send_user(s, users_[userid]);
+          }
         }
-        return;
       }
     } else {
       std::cout << "Invalid command: " << str << "\n";
       return;
-    }
-    // Broadcast that you joined, including to yourself.
-    for (auto& [_, client] : clients_) {
-      if (auto s = client.session.lock(); s) {
-        send_user(s, users_[userid]);
-      }
-    }
-    if (auto s = ctx.ws_session.lock(); s) {
-      s->send(absl::StrFormat("userid %d", userid));
-      // Send a list of "active" users. Only connected users? Is 7 days too long?
-      // Will send your user again. Oh well.
-      send_users(s, std::chrono::days(7));
     }
   } else {
     users_[userid].last_active =  std::chrono::system_clock::now();
@@ -309,6 +303,11 @@ void AgentWebSocket::on_receive(const beauty::ws_context& ctx, const std::string
           }
         }
       }
+    } else if (command == "settings") {
+      int color, emoji;
+      iss >> color >> emoji;
+      users_[userid].color = color;
+      users_[userid].emoji = emoji;
     } else {
       std::cout << "Invalid command: " << str << "\n";
       return;
