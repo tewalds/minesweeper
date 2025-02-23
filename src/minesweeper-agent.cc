@@ -23,7 +23,7 @@
 ABSL_FLAG(std::string, host, "localhost", "Websocket host.");
 ABSL_FLAG(int, port, 9001, "Websocket port.");
 ABSL_FLAG(std::string, name, "wsagent", "Username");
-ABSL_FLAG(float, sleep, 0.001, "How long to sleep (in seconds) between actions.");
+ABSL_FLAG(float, sleep, 0.1, "How long to sleep (in seconds) between actions.");
 
 
 struct State {
