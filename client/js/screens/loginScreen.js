@@ -28,8 +28,12 @@ const LoginScreen = {
             const usernameInput = document.getElementById('username');
             const username = usernameInput.value.trim();
 
-            if (username.length < 3) {
-                alert('Username must be at least 3 characters long');
+            if (username.length < 3 || username.length > 32) {
+                alert('Username must be between 3 and 32 characters long');
+                return;
+            }
+            if (username.includes(' ')) {
+                alert('Username cannot contain spaces');
                 return;
             }
 
