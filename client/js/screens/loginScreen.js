@@ -36,27 +36,32 @@ const LoginScreen = {
                 GameState.currentUser.username = username;
 
                 if (GameState.connection instanceof WebSocketGameConnection) {
-                    // Server mode: Try to login with saved userid first
-                    const savedUserId = GameStorage.load(GameStorage.USERID_KEY);
+                    try {
+                        console.log('Attempting to login with username:', username);
+                        // Login with username
+                        const userData = await GameState.connection.loginPlayer(username);
+                        console.log('Received user data from server:', userData);
+                        GameState.updateFromServer(userData);
 
-                    if (savedUserId) {
-                        try {
-                            // Attempt to login with saved userid
-                            const userData = await GameState.connection.loginPlayer(savedUserId);
-                            GameState.updateFromServer(userData);
+                        // Check if we need to customize (new user)
+                        const needsCustomization = GameState.currentUser.colorIndex === -1 || GameState.currentUser.avatarIndex === -1;
+                        console.log('User customization status:', {
+                            colorIndex: GameState.currentUser.colorIndex,
+                            avatarIndex: GameState.currentUser.avatarIndex,
+                            needsCustomization
+                        });
 
-                            // Login successful, go directly to spawn screen
+                        if (needsCustomization) {
+                            console.log('New user, showing customize screen');
+                            App.showScreen(App.screens.CUSTOMIZE);
+                        } else {
+                            console.log('Existing user with settings, going to spawn');
                             App.showScreen(App.screens.SPAWN);
-                            return;
-                        } catch (loginError) {
-                            console.log('Login failed, proceeding with registration:', loginError);
-                            // Login failed, clear saved userid
-                            GameStorage.save(GameStorage.USERID_KEY, null);
                         }
+                    } catch (loginError) {
+                        console.error('Login failed:', loginError);
+                        alert('Login failed. Please try again.');
                     }
-
-                    // No saved userid or login failed, go to customize screen for registration
-                    App.showScreen(App.screens.CUSTOMIZE);
                 } else {
                     // Local mode: Use mock DB
                     const savedPlayer = await MockDB.getPlayer(username);

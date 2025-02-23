@@ -126,6 +126,7 @@ class WebSocketGameConnection extends GameConnection {
                 this.ws.onmessage = (event) => {
                     try {
                         const [command, ...args] = event.data.split(' ');
+                        console.log('Received WebSocket message:', { command, args });
 
                         switch (command) {
                             case 'grid': {
@@ -141,11 +142,17 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'user': {
                                 const [userId, name, colorIndex, avatarIndex, score, viewX1, viewY1, viewX2, viewY2] = args;
+                                console.log('Processing user data:', {
+                                    userId: parseInt(userId),
+                                    name,
+                                    colorIndex: parseInt(colorIndex),
+                                    avatarIndex: parseInt(avatarIndex)
+                                });
                                 const userData = {
                                     userId: parseInt(userId),
                                     name,
-                                    color: GameState.colors[parseInt(colorIndex)],
-                                    avatar: GameState.avatars[parseInt(avatarIndex)],
+                                    color: parseInt(colorIndex),
+                                    avatar: parseInt(avatarIndex),
                                     score: parseInt(score),
                                     view: {
                                         x1: parseInt(viewX1),
@@ -174,25 +181,20 @@ class WebSocketGameConnection extends GameConnection {
                             }
                             case 'userid': {
                                 const userId = parseInt(args[0]);
+                                console.log('Received userid:', userId);
                                 this.userId = userId;
                                 break;
                             }
-                            case 'error': {
-                                const error = args.join(' ');
-                                if (this.registrationPromise) {
-                                    this.registrationPromise.reject(new Error(error));
-                                    this.registrationPromise = null;
-                                }
-                                if (this.loginPromise) {
-                                    this.loginPromise.reject(new Error(error));
-                                    this.loginPromise = null;
-                                }
-                                this.onError(new Error(error));
+                            case 'join': {
+                                const userid = parseInt(args[0]);
+                                const username = args[1];
+                                console.log('User joined:', { userid, username });
                                 break;
                             }
-                            case 'reset':
+                            case 'reset': {
                                 this.onReset();
                                 break;
+                            }
                             default:
                                 console.warn(`Unknown command received: ${command}`);
                         }
@@ -299,7 +301,7 @@ class WebSocketGameConnection extends GameConnection {
         }
     }
 
-    async loginPlayer(userId) {
+    async loginPlayer(username) {
         if (!this.connected) throw new Error("Not connected");
 
         // Create a promise that will be resolved when we receive our user data
@@ -318,8 +320,8 @@ class WebSocketGameConnection extends GameConnection {
         }, 5000);
 
         try {
-            console.log('Logging in player:', userId);
-            this.ws.send(`login ${userId}`);
+            console.log('Logging in player:', username);
+            this.ws.send(`login ${username}`);
             const userData = await promise;  // Wait for user data
             clearTimeout(timeout);
             console.log('Player logged in successfully:', userData);
@@ -330,6 +332,14 @@ class WebSocketGameConnection extends GameConnection {
             console.error('Login failed:', error);
             throw error;
         }
+    }
+
+    async sendSettings(colorIndex, emojiIndex) {
+        if (!this.connected) throw new Error("Not connected");
+        if (!this.userId) throw new Error("Must login first");
+
+        console.log('Sending settings:', colorIndex, emojiIndex);
+        this.ws.send(`settings ${colorIndex} ${emojiIndex}`);
     }
 
     async openCell(x, y) {

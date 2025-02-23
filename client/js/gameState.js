@@ -67,7 +67,9 @@ const GameState = {
         username: null,
         userId: null,
         avatar: null,
+        avatarIndex: -1,
         color: null,
+        colorIndex: -1,
         score: 0,
         view: null
     },
@@ -93,7 +95,9 @@ const GameState = {
             username,
             userId: null,
             avatar: null,
+            avatarIndex: -1,
             color: null,
+            colorIndex: -1,
             score: 0,
             view: null
         };
@@ -120,16 +124,36 @@ const GameState = {
 
     // Update user data from server
     updateFromServer: function (userData) {
+        console.log('Updating user data from server:', userData);
         this.currentUser.userId = userData.userId;
         this.currentUser.username = userData.name;
-        this.currentUser.avatar = userData.avatar;
-        this.currentUser.color = userData.color;
+
+        // Store both indices and actual values
+        this.currentUser.colorIndex = userData.color;
+        this.currentUser.avatarIndex = userData.avatar;
+
+        // Convert indices to actual values if they're valid
+        if (userData.color >= 0 && userData.color < this.colors.length) {
+            this.currentUser.color = this.colors[userData.color];
+        } else {
+            this.currentUser.color = null;
+        }
+
+        if (userData.avatar >= 0 && userData.avatar < this.avatars.length) {
+            this.currentUser.avatar = this.avatars[userData.avatar];
+        } else {
+            this.currentUser.avatar = null;
+        }
+
         this.currentUser.score = userData.score;
         this.currentUser.view = userData.view;
+        console.log('Updated current user:', this.currentUser);
 
-        // Update players map
+        // Update players map with converted values
         this.players.set(userData.userId, {
             ...userData,
+            color: this.currentUser.color,
+            avatar: this.currentUser.avatar,
             lastActive: Date.now()
         });
         this.emit('playersUpdated');
@@ -141,8 +165,21 @@ const GameState = {
     // Update other player data
     updatePlayer: function (userData) {
         if (userData.userId !== this.currentUser.userId) {
+            // Convert indices to actual values for other players too
+            let color = null;
+            let avatar = null;
+
+            if (userData.color >= 0 && userData.color < this.colors.length) {
+                color = this.colors[userData.color];
+            }
+            if (userData.avatar >= 0 && userData.avatar < this.avatars.length) {
+                avatar = this.avatars[userData.avatar];
+            }
+
             this.players.set(userData.userId, {
                 ...userData,
+                color,
+                avatar,
                 lastActive: Date.now()
             });
             this.emit('playersUpdated');

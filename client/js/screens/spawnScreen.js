@@ -81,7 +81,6 @@ const SpawnScreen = {
 
             // Filter and format player data
             for (const [userId, userData] of GameState.players.entries()) {
-                console.log('Processing player:', userData);
                 if (userData.lastActive > timeLimit && userData.userId !== GameState.currentUser.userId) {
                     onlinePlayers.push({
                         username: userData.name,

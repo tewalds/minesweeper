@@ -388,9 +388,9 @@ const PlayScreen = {
 
     show: async function (container) {
         console.log('PlayScreen.show() - Starting initialization');
-        // Check if we're in server mode
+
         const isServerMode = GameState.connection instanceof WebSocketGameConnection;
-        console.log('PlayScreen - Connection mode:', isServerMode ? 'server' : 'local');
+        console.log('PlayScreen - Mode:', isServerMode ? 'server' : 'local');
 
         // Set up event handlers for connection first if in server mode
         if (isServerMode) {
@@ -473,7 +473,7 @@ const PlayScreen = {
             <div class="play-screen">
                 <div class="player-info-container">
                     <div class="player-info">
-                        <span style="color: ${GameState.currentUser.color}">${GameState.currentUser.avatar || '👤'}</span>
+                        <span style="color: ${GameState.currentUser.color || '#000'}">${GameState.currentUser.avatar || '👤'}</span>
                         <span>${GameState.currentUser.username}</span>
                         <span class="player-score">Score: ${score}</span>
                     </div>
@@ -1484,8 +1484,27 @@ const PlayScreen = {
             } else {
                 const marker = MinesweeperDB.mines.markers.get(key);
                 if (marker) {
-                    update.html = marker.avatar;
-                    update.color = marker.color;
+                    // Find the player who placed this marker
+                    let playerData = null;
+                    if (isServerMode) {
+                        // In server mode, get player data from GameState
+                        for (const [userId, userData] of GameState.players.entries()) {
+                            if (userData.name === marker.username) {
+                                playerData = userData;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (playerData) {
+                        // Use server player data
+                        update.html = playerData.avatar;
+                        update.color = playerData.color;
+                    } else {
+                        // Fallback to marker data (local mode or player not found)
+                        update.html = marker.avatar;
+                        update.color = marker.color;
+                    }
                 }
             }
 
@@ -1537,6 +1556,18 @@ const PlayScreen = {
         players.forEach(player => {
             if (player.username === GameState.currentUser.username) return;
 
+            // Get player data from GameState in server mode
+            let playerData = player;
+            const isServerMode = GameState.connection instanceof WebSocketGameConnection;
+            if (isServerMode) {
+                for (const [userId, userData] of GameState.players.entries()) {
+                    if (userData.name === player.username) {
+                        playerData = userData;
+                        break;
+                    }
+                }
+            }
+
             // Get simulated position if available, otherwise use static position
             const movement = this.playerMovements.get(player.username);
             const x = movement ? movement.currentX : player.position.x;
@@ -1565,14 +1596,14 @@ const PlayScreen = {
                 cursor.className = 'player-cursor';
                 cursor.style.left = `${screenPos.x}px`;
                 cursor.style.top = `${screenPos.y}px`;
-                cursor.style.color = player.color;
+                cursor.style.color = playerData.color;
                 cursor.style.opacity = opacity;
 
                 cursor.innerHTML = `
                     <div class="cursor-pointer"></div>
                     <div class="cursor-info">
-                        <span class="cursor-avatar">${player.avatar}</span>
-                        <span class="cursor-name">${player.username}</span>
+                        <span class="cursor-avatar">${playerData.avatar}</span>
+                        <span class="cursor-name">${playerData.username}</span>
                         <span class="cursor-score">${score}</span>
                     </div>
                 `;
@@ -1591,8 +1622,8 @@ const PlayScreen = {
 
                 indicator.innerHTML = `
                     <span class="indicator-arrow">${this.getDirectionArrow(pos.angle)}</span>
-                    <span class="indicator-avatar" style="background-color: ${player.color}20">${player.avatar}</span>
-                    <span class="indicator-name">${player.username}</span>
+                    <span class="indicator-avatar" style="background-color: ${playerData.color}20">${playerData.avatar}</span>
+                    <span class="indicator-name">${playerData.username}</span>
                     <span class="indicator-score">${score}</span>
                 `;
 

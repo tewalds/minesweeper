@@ -150,7 +150,7 @@ const CustomizeScreen = {
             GameState.currentUser.avatar = avatar;
 
             // Enable continue if both selected
-            continueBtn.disabled = !GameState.currentUser.color;
+            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
         });
 
         colorGrid?.addEventListener('click', (e) => {
@@ -170,10 +170,36 @@ const CustomizeScreen = {
             GameState.currentUser.color = color;
 
             // Enable continue if both selected
-            continueBtn.disabled = !GameState.currentUser.avatar;
+            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
         });
 
-        continueBtn?.addEventListener('click', () => {
+        continueBtn?.addEventListener('click', async () => {
+            if (isServerMode) {
+                try {
+                    // Get indices of selected color and avatar
+                    const colorIndex = GameState.colors.indexOf(GameState.currentUser.color);
+                    const avatarIndex = GameState.avatars.indexOf(GameState.currentUser.avatar);
+
+                    console.log('Sending settings with indices:', {
+                        color: GameState.currentUser.color,
+                        colorIndex,
+                        avatar: GameState.currentUser.avatar,
+                        avatarIndex
+                    });
+
+                    if (colorIndex === -1 || avatarIndex === -1) {
+                        throw new Error("Invalid color or avatar selected");
+                    }
+
+                    // Send settings to server
+                    await GameState.connection.sendSettings(colorIndex, avatarIndex);
+                } catch (error) {
+                    console.error('Failed to send settings:', error);
+                    alert('Failed to save appearance. Please try again.');
+                    return;
+                }
+            }
+
             App.showScreen(App.screens.SPAWN);
         });
     }
