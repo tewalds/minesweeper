@@ -149,7 +149,7 @@ int AgentWebSocket::send_rect(const session_ptr& session, Recti r) {
   for (int x = r.left(); x < r.right(); x++) {
     for (int y = r.top(); y < r.bottom(); y++) {
       Cell c = state_(x, y);
-      if (c.state() != HIDDEN) {
+      if (c.state() != HIDDEN || c.user() != 0) {  // Could have been unmarked.
         send_update(session, {c.state(), {x, y}, c.user()});
         sent++;
       }
