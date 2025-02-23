@@ -147,16 +147,20 @@ int main(int argc, char **argv) {
           s->updates.clear();
         }
 
-        if (action.action == OPEN) {
-          client.ws_send(absl::StrFormat("open %i %i", action.point.x, action.point.y));
-        } else if (action.action == MARK) {
-          client.ws_send(absl::StrFormat("mark %i %i", action.point.x, action.point.y));
-        } else if (action.action == UNMARK) {
-          client.ws_send(absl::StrFormat("unmark %i %i", action.point.x, action.point.y));
-        } else if (action.action == PASS) {
+        if (action.action == PASS || action.action == RESET || action.action == PAUSE) {
           // ignore
         } else if (action.action == QUIT) {
           done = true;
+          break;
+        } else {
+          client.ws_send(absl::StrFormat("mouse %i.5 %i.5", action.point.x, action.point.y));
+          if (action.action == OPEN) {
+            client.ws_send(absl::StrFormat("open %i %i", action.point.x, action.point.y));
+          } else if (action.action == MARK) {
+            client.ws_send(absl::StrFormat("mark %i %i", action.point.x, action.point.y));
+          } else if (action.action == UNMARK) {
+            client.ws_send(absl::StrFormat("unmark %i %i", action.point.x, action.point.y));
+          }
         }
         ping_pong.send(client).wait();
       } else {
