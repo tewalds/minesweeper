@@ -40,12 +40,15 @@ class GameConnection {
                                 break;
                             }
                             case 'user': {
+                                // console.log("Received user data:", args);
                                 const [userId, name, colorIndex, avatarIndex, score, mouseX, mouseY, active] = args;
                                 const userData = {
                                     userId: parseInt(userId),
                                     name,
-                                    color: parseInt(colorIndex),
-                                    avatar: parseInt(avatarIndex),
+                                    colorIndex: parseInt(colorIndex),
+                                    color: GameState.colors[parseInt(colorIndex)] || GameState.defaultColor,
+                                    avatarIndex: parseInt(avatarIndex),
+                                    avatar: GameState.avatars[parseInt(avatarIndex)] || GameState.defaultAvatar,
                                     score: parseInt(score),
                                     mouse: {
                                         x: parseInt(mouseX),
@@ -53,6 +56,7 @@ class GameConnection {
                                     },
                                     lastActive: Date.now() - 1000 * parseInt(active),
                                 };
+                                GameState.updatePlayer(userData);
 
                                 if (userData.userId === this.userId) {
                                     if (this.registrationPromise) {
@@ -63,9 +67,6 @@ class GameConnection {
                                         this.loginPromise.resolve(userData);
                                         this.loginPromise = null;
                                     }
-                                    GameState.updateFromServer(userData);
-                                } else {
-                                    GameState.updatePlayer(userData);
                                 }
                                 break;
                             }
@@ -73,12 +74,7 @@ class GameConnection {
                                 const userId = parseInt(args[0]);
                                 console.log('Received userid:', userId);
                                 this.userId = userId;
-                                break;
-                            }
-                            case 'join': {
-                                const userid = parseInt(args[0]);
-                                const username = args[1];
-                                console.log('User joined:', { userid, username });
+                                GameState.userid = userId;
                                 break;
                             }
                             case 'reset': {
@@ -87,11 +83,8 @@ class GameConnection {
                             }
                             case 'score': {
                                 const [delta, x, y] = args.map(Number);
-                                // Update the user's score in GameState
-                                if (this.userId) {
-                                    GameState.currentUser.score += delta;
-                                    // TODO: Show a score effect at the x, y position.
-                                }
+                                GameState.players.get(this.userId).score += delta;
+                                // TODO: Show a score effect at the x, y position.
                                 break;
                             }
                             case 'mouse': {

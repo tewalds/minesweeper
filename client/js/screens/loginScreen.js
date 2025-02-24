@@ -40,20 +40,18 @@ const LoginScreen = {
             try {
                 // Save username
                 localStorage.setItem(this.USERNAME_KEY, username);
-                GameState.currentUser.username = username;
 
                 try {
                     console.log('Attempting to login with username:', username);
                     // Login with username
                     const userData = await GameState.connection.loginPlayer(username);
                     console.log('Received user data from server:', userData);
-                    GameState.updateFromServer(userData);
 
                     // Check if we need to customize (new user)
-                    const needsCustomization = GameState.currentUser.colorIndex === -1 || GameState.currentUser.avatarIndex === -1;
+                    const needsCustomization = (userData.colorIndex === -1 || userData.avatarIndex === -1);
                     console.log('User customization status:', {
-                        colorIndex: GameState.currentUser.colorIndex,
-                        avatarIndex: GameState.currentUser.avatarIndex,
+                        colorIndex: userData.colorIndex,
+                        avatarIndex: userData.avatarIndex,
                         needsCustomization
                     });
 

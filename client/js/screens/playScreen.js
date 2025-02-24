@@ -52,8 +52,8 @@ const PlayScreen = {
 
             // Request initial view with explicit coordinates
             const viewSize = 20; // View radius
-            const x = GameState.currentUser.x || 0;
-            const y = GameState.currentUser.y || 0;
+            const x = GameState.currentUser().mouse.x;
+            const y = GameState.currentUser().mouse.y;
             GameState.connection.sendView(x - viewSize, y - viewSize, x + viewSize, y + viewSize, true);
         }
     },
@@ -162,13 +162,13 @@ const PlayScreen = {
         // Update score display
         const scoreElement = document.querySelector('.player-score');
         if (scoreElement) {
-            scoreElement.textContent = `Score: ${GameState.currentUser.score || 0}`;
+            scoreElement.textContent = `Score: ${GameState.currentUser().score}`;
         }
     },
 
     // Initialize movement state for a player
     initPlayerMovement: function (player) {
-        if (player.username === GameState.currentUser.username) return;
+        if (player.username === GameState.currentUser().username) return;
 
         const state = {
             currentX: player.position.x,
@@ -231,7 +231,7 @@ const PlayScreen = {
 
         // Update each player's movement
         this.playerMovements.forEach((state, username) => {
-            if (username === GameState.currentUser.username) return;
+            if (username === GameState.currentUser().username) return;
 
             if (state.isMoving) {
                 // Update current position based on progress
@@ -417,9 +417,9 @@ const PlayScreen = {
             <div class="play-screen">
                 <div class="player-info-container">
                     <div class="player-info">
-                        <span style="color: ${GameState.currentUser.color || '#000'}">${GameState.currentUser.avatar || '👤'}</span>
-                        <span>${GameState.currentUser.username}</span>
-                        <span class="player-score">Score: ${GameState.currentUser.score || 0}</span>
+                        <span style="color: ${GameState.currentUser().color}">${GameState.currentUser().avatar}</span>
+                        <span>${GameState.currentUser().username}</span>
+                        <span class="player-score">Score: ${GameState.currentUser().score}</span>
                     </div>
                     <div class="settings-menu">
                         <button class="settings-toggle">⚙️ Menu</button>
@@ -635,7 +635,7 @@ const PlayScreen = {
         // Update score
         const scoreElement = document.querySelector('.player-score');
         if (scoreElement) {
-            scoreElement.textContent = `Score: ${GameState.currentUser.score || 0}`;
+            scoreElement.textContent = `Score: ${GameState.currentUser().score}`;
         }
     },
 
@@ -925,22 +925,8 @@ const PlayScreen = {
         if (logoutButton) {
             logoutButton.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // Disconnect from server/clear connection
                 GameState.disconnect();
-
-                // Clear user data but keep username for convenience
-                const username = GameState.currentUser.username;
-                GameState.currentUser = {
-                    username,
-                    userId: null,
-                    avatar: null,
-                    color: null,
-                    score: 0,
-                    view: null
-                };
-
-                // Return to connection screen
-                App.showScreen(App.screens.CONNECTION);
+                App.showScreen(App.screens.LOGIN);
             });
         }
 
@@ -1296,8 +1282,7 @@ const PlayScreen = {
         // Process each player from GameState
         for (const [userId, playerData] of GameState.players.entries()) {
             // Skip current user and inactive players (no mouse data)
-            if (userId === GameState.currentUser.userId || !playerData.mouse ||
-                (playerData.mouse.x == 0 && playerData.mouse.y == 0)) {
+            if (userId === GameState.userid || (playerData.mouse.x == 0 && playerData.mouse.y == 0)) {
                 continue;
             }
 

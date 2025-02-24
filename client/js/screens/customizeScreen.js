@@ -28,12 +28,12 @@ const CustomizeScreen = {
         container.innerHTML = html;
 
         // Hide back button if we have a userId (registered player)
-        if (GameState.currentUser.userId) {
+        if (GameState.userid) {
             document.querySelector('.back-button').style.display = 'none';
         }
 
         this.attachEventListeners(container);
-        this.loadSavedSelections();
+        document.getElementById('customize-done').disabled = true;
     },
 
     createAvatarGrid: function () {
@@ -46,11 +46,6 @@ const CustomizeScreen = {
         return GameState.colors.map((color, index) =>
             `<div class="color-option" style="background-color: ${color}" data-color="${color}" data-index="${index}"></div>`
         ).join('');
-    },
-
-    loadSavedSelections: function () {
-        // No longer need to load saved selections since we're online only
-        document.getElementById('customize-done').disabled = true;
     },
 
     attachEventListeners: function (container) {
@@ -94,23 +89,12 @@ const CustomizeScreen = {
 
         // Logout button
         container.querySelector('.logout-button')?.addEventListener('click', () => {
-            // Disconnect from server/clear connection
             GameState.disconnect();
-
-            // Clear user data but keep username for convenience
-            const username = GameState.currentUser.username;
-            GameState.currentUser = {
-                username,
-                userId: null,
-                avatar: null,
-                color: null,
-                score: 0,
-                view: null
-            };
-
-            // Return to connection screen
-            App.showScreen(App.screens.CONNECTION);
+            App.showScreen(App.screens.LOGIN);
         });
+
+        let selectedAvatar = null;
+        let selectedColor = null;
 
         avatarGrid?.addEventListener('click', (e) => {
             const avatarOption = e.target.closest('.avatar-option');
@@ -120,12 +104,11 @@ const CustomizeScreen = {
             container.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
             avatarOption.classList.add('selected');
 
-            const avatar = avatarOption.dataset.avatar;
-            container.querySelector('#avatar-preview').textContent = avatar;
-            GameState.currentUser.avatar = avatar;
+            container.querySelector('#avatar-preview').textContent = avatarOption.dataset.avatar;
+            selectedAvatar = avatarOption.dataset.index;
 
             // Enable continue if both avatar and color are selected
-            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
+            continueBtn.disabled = !selectedColor;
         });
 
         colorGrid?.addEventListener('click', (e) => {
@@ -136,33 +119,22 @@ const CustomizeScreen = {
             container.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('selected'));
             colorOption.classList.add('selected');
 
-            const color = colorOption.dataset.color;
-            container.querySelector('#color-preview').style.backgroundColor = color;
-            GameState.currentUser.color = color;
+            container.querySelector('#color-preview').style.backgroundColor = colorOption.dataset.color;
+            selectedColor = colorOption.dataset.index;
 
             // Enable continue if both avatar and color are selected
-            continueBtn.disabled = !(GameState.currentUser.avatar && GameState.currentUser.color);
+            continueBtn.disabled = !selectedAvatar;
         });
 
         continueBtn?.addEventListener('click', async () => {
             try {
-                // Get indices of selected color and avatar
-                const colorIndex = GameState.colors.indexOf(GameState.currentUser.color);
-                const avatarIndex = GameState.avatars.indexOf(GameState.currentUser.avatar);
-
-                console.log('Sending settings with indices:', {
-                    color: GameState.currentUser.color,
-                    colorIndex,
-                    avatar: GameState.currentUser.avatar,
-                    avatarIndex
-                });
-
-                if (colorIndex === -1 || avatarIndex === -1) {
-                    throw new Error("Invalid color or avatar selected");
-                }
-
-                // Send settings to server
-                await GameState.connection.sendSettings(colorIndex, avatarIndex);
+                let user = GameState.currentUser();
+                user.colorIndex = selectedColor;
+                user.color = GameState.colors[selectedColor];
+                user.avatarIndex = selectedAvatar;
+                user.avatar = GameState.avatars[selectedAvatar];
+                GameState.updatePlayer(user);
+                await GameState.connection.sendSettings(selectedColor, selectedAvatar);
             } catch (error) {
                 console.error('Failed to send settings:', error);
                 alert('Failed to save appearance. Please try again.');

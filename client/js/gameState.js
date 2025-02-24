@@ -1,5 +1,6 @@
 const GameState = {
     // Predefined avatars (10x10 grid of unique objects)
+    defaultAvatar: '👤',
     avatars: [
         '🎈', '🎨', '🎭', '🎪', '🎰', '🎲', '🎯', '🎱', '🎳', '🎸',
         '🎺', '🎻', '🎬', '📷', '📺', '💻', '☎️', '📱', '⌚️', '💡',
@@ -14,6 +15,7 @@ const GameState = {
     ],
 
     // Predefined colors (10x10 grid - full spectrum with good contrast)
+    defaultColor: '#000',
     colors: [
         // Reds to Oranges
         '#FF0000', '#FF1A1A', '#FF3333', '#FF4D4D', '#FF6666', '#FF8080', '#FF9999', '#FFB2B2', '#FFCCCC', '#FFE5E5',
@@ -62,16 +64,10 @@ const GameState = {
 
     // Track all players
     players: new Map(),
+    userid: null,
 
-    currentUser: {
-        username: null,
-        userId: null,
-        avatar: null,
-        avatarIndex: -1,
-        color: null,
-        colorIndex: -1,
-        score: 0,
-        mouse: { x: 0, y: 0 }
+    currentUser: function() {
+        return this.players.get(this.userid);
     },
 
     // Add connection management
@@ -89,84 +85,16 @@ const GameState = {
             this.connection.disconnect();
             this.connection = null;
         }
-        // Clear current user data but keep username for convenience
-        const username = this.currentUser.username;
-        this.currentUser = {
-            username,
-            userId: null,
-            avatar: null,
-            avatarIndex: -1,
-            color: null,
-            colorIndex: -1,
-            score: 0,
-            mouse: { x: 0, y: 0 }
-        };
-        // Clear players
+        this.userid = 0;
         this.players.clear();
         this.emit('playersUpdated');
     },
 
     init: async function () { },
 
-    // Update user data from server
-    updateFromServer: function (userData) {
-        this.currentUser.userId = userData.userId;
-        this.currentUser.username = userData.name;
-
-        this.currentUser.colorIndex = userData.color;
-        this.currentUser.avatarIndex = userData.avatar;
-
-        if (userData.color >= 0 && userData.color < this.colors.length) {
-            this.currentUser.color = this.colors[userData.color];
-        } else {
-            this.currentUser.color = null;
-        }
-
-        if (userData.avatar >= 0 && userData.avatar < this.avatars.length) {
-            this.currentUser.avatar = this.avatars[userData.avatar];
-        } else {
-            this.currentUser.avatar = null;
-        }
-
-        this.currentUser.score = userData.score;
-
-        this.players.set(userData.userId, {
-            ...userData,
-            color: this.currentUser.color,
-            avatar: this.currentUser.avatar,
-        });
-        this.emit('playersUpdated');
-    },
-
-    // Update other player data
     updatePlayer: function (userData) {
-        if (userData.userId !== this.currentUser.userId) {
-            // Convert indices to actual values for other players too
-            let color = null;
-            let avatar = null;
-
-            if (userData.color >= 0 && userData.color < this.colors.length) {
-                color = this.colors[userData.color];
-            }
-            if (userData.avatar >= 0 && userData.avatar < this.avatars.length) {
-                avatar = this.avatars[userData.avatar];
-            }
-
-            // Update or create player data
-            const existingPlayer = this.players.get(userData.userId) || {};
-            this.players.set(userData.userId, {
-                ...existingPlayer,
-                ...userData,
-                color,
-                avatar,
-                // Preserve mouse position if not in update
-                mouse: userData.mouse || existingPlayer.mouse
-            });
-
-            // Debug: Log player update
-            console.log('Updated player data:', this.players.get(userData.userId));
-
-            this.emit('playersUpdated');
-        }
+        this.players.set(userData.userId, userData);
+        console.log('Updated player data:', userData);
+        this.emit('playersUpdated');
     }
 }; 

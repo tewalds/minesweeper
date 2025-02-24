@@ -118,7 +118,7 @@ const SpawnScreen = {
 
             // Send initial view centered on spawn position
             const viewSize = 20; // View radius. TODO: Configure based on zoom/resolution.
-            GameState.connection.ws.send(`view ${validPos.x - viewSize} ${validPos.y - viewSize} ${validPos.x + viewSize} ${validPos.y + viewSize} 1`);
+            GameState.connection.sendView(x - viewSize, y - viewSize, x + viewSize, y + viewSize, true);
 
             await App.showScreen(App.screens.PLAY);
         } catch (error) {
