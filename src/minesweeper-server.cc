@@ -252,12 +252,13 @@ int main(int argc, char **argv) {
                 iss >> x1 >> y1 >> x2 >> y2 >> force;
                 std::optional<Recti> new_view = env.state().rect().intersection({{x1, y1}, {x2, y2}});
                 if (new_view) {
+                  Recti old_view = users[userid].view;
                   users[userid].view = *new_view;
                   if (auto s = ctx.ws_session.lock(); s) {
                     if (force) {
                       send_rect(s, env.state(), *new_view);
                     } else {
-                      for (Recti r : new_view->difference(users[userid].view)) {
+                      for (Recti r : new_view->difference(old_view)) {
                         send_rect(s, env.state(), r);
                       }
                     }
