@@ -40,48 +40,6 @@ const PlayScreen = {
     revealed: new Set(),
     markers: new Map(),
 
-    // Initialize game state
-    initializeGameState: function () {
-        // Clear existing state
-        this.revealed.clear();
-        this.markers.clear();
-
-        // Set up WebSocket handlers
-        if (GameState.connection) {
-            console.log('Setting up WebSocket handlers');
-
-            // Request initial view with explicit coordinates
-            const viewSize = 20; // View radius
-            const x = GameState.currentUser().mouse.x;
-            const y = GameState.currentUser().mouse.y;
-            GameState.connection.sendView(x - viewSize, y - viewSize, x + viewSize, y + viewSize, true);
-        }
-    },
-
-    // Update player state
-    updatePlayerState: function (data) {
-        if (!data || !data.players) return;
-
-        // Update player data in GameState
-        data.players.forEach(player => {
-            GameState.players.set(player.userId, {
-                name: player.username,
-                avatar: player.avatar,
-                color: player.color,
-                score: player.score,
-                mouse: player.mouse,
-                lastActive: Date.now()
-            });
-        });
-
-        // Update visible cells
-        const grid = document.querySelector('.game-grid');
-        const container = document.querySelector('.game-container');
-        if (grid && container) {
-            this.updateVisibleCells(container, grid);
-        }
-    },
-
     // Update cell state
     updateCell: function (x, y, state, userId) {
         const key = `${x},${y}`;
@@ -131,22 +89,6 @@ const PlayScreen = {
             } else {
                 console.warn('Received MARKED state without userId:', { x, y, state });
             }
-        }
-    },
-
-    // Process batch updates
-    processBatchUpdates: function (updates) {
-        if (!updates || !Array.isArray(updates)) return;
-
-        updates.forEach(update => {
-            this.updateCell(update.x, update.y, update.state, update.userId);
-        });
-
-        // Update visible cells
-        const grid = document.querySelector('.game-grid');
-        const container = document.querySelector('.game-container');
-        if (grid && container) {
-            this.updateVisibleCells(container, grid);
         }
     },
 
