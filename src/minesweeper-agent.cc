@@ -151,11 +151,14 @@ int main(int argc, char **argv) {
           client.ws_send(absl::StrFormat("mouse %i.5 %i.5", action.point.x, action.point.y));
           client.ws_send(absl::StrFormat("act %i %i %i", action.action, action.point.x, action.point.y));
           ping_pong.send(client).wait();
+        } else if (action.action == PASS) {
+          // We might be done, or waiting for someone else to open up areas. Until then, slow down.
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
         } else if (action.action == QUIT) {
           done = true;
           break;
         } else {
-          // Ignore PASS, RESET, PAUSE.
+          // Ignore RESET, PAUSE.
         }
       } else {
         auto s = state.lock();
