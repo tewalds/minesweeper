@@ -207,6 +207,13 @@ class GameConnection {
         this.ws.send(`settings ${colorIndex} ${emojiIndex}`);
     }
 
+    async sendView(x1, y1, x2, y2, force) {
+        if (!this.connected) throw new Error("Not connected");
+        if (!this.userId) throw new Error("Must login first");
+        console.log('sending view:', x1, y1, x2, y2, force);
+        this.ws.send(`view ${x1} ${y1} ${x2} ${y2} ${force ? 1 : 0}`)
+    }
+
     async act(action, x, y) {
         if (!this.connected) throw new Error("Not connected");
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {

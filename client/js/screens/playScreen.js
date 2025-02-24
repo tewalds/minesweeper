@@ -54,7 +54,7 @@ const PlayScreen = {
             const viewSize = 20; // View radius
             const x = GameState.currentUser.x || 0;
             const y = GameState.currentUser.y || 0;
-            GameState.connection.ws.send(`view ${x - viewSize} ${y - viewSize} ${x + viewSize} ${y + viewSize} 1`);
+            GameState.connection.sendView(x - viewSize, y - viewSize, x + viewSize, y + viewSize, true);
         }
     },
 
@@ -1176,7 +1176,7 @@ const PlayScreen = {
         // Only send view update if it changed
         if (bounds !== this.bounds) {
             this.currentView = bounds;
-            GameState.connection.ws.send(`view ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom} 0`);
+            GameState.connection.sendView(bounds.left, bounds.top, bounds.right, bounds.bottom, false);
         }
 
         return bounds;
