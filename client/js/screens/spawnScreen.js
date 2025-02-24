@@ -1,5 +1,6 @@
 const SpawnScreen = {
     show: function (container) {
+        const gridInfo = GameState.connection.getGridInfo();
         const html = `
             <div class="spawn-screen">
                 <div class="screen-header">
@@ -18,8 +19,8 @@ const SpawnScreen = {
                     <div class="spawn-option custom-spawn">
                         <h3>Custom Location</h3>
                         <div class="coordinate-inputs">
-                            <input type="number" id="spawn-x" placeholder="X coordinate" min="0" value="0">
-                            <input type="number" id="spawn-y" placeholder="Y coordinate" min="0" value="0">
+                            <input type="number" id="spawn-x" placeholder="X coordinate" min="0" max="${gridInfo.width}" value="${GameState.currentUser().mouse.x}">
+                            <input type="number" id="spawn-y" placeholder="Y coordinate" min="0" max="${gridInfo.height}" value="${GameState.currentUser().mouse.y}">
                             <button class="spawn-button" data-spawn="custom">Spawn Here</button>
                         </div>
                     </div>
@@ -62,21 +63,12 @@ const SpawnScreen = {
 
     createPlayerList: async function () {
         const onlinePlayers = [];
-        const now = Date.now();
-        const timeLimit = now - (60 * 1000); // Players active in last minute
+        const timeLimit = Date.now() - (60 * 1000); // Players active in last minute
 
         // Filter and format player data
-        for (const [userId, userData] of GameState.players.entries()) {
-            if (userData.lastActive > timeLimit && userData.userId !== GameState.currentUser.userId) {
-                onlinePlayers.push({
-                    username: userData.name,
-                    avatar: userData.avatar,
-                    color: userData.color,
-                    position: {
-                        x: userData.mouse?.x || 0,
-                        y: userData.mouse?.y || 0,
-                    }
-                });
+        for (const [userId, user] of GameState.players.entries()) {
+            if (user.lastActive > timeLimit && user.userId !== GameState.userid) {
+                onlinePlayers.push(user);
             }
         }
 
@@ -85,10 +77,10 @@ const SpawnScreen = {
         }
 
         return onlinePlayers.map(player => `
-            <div class="player-option" data-x="${player.position.x}" data-y="${player.position.y}">
+            <div class="player-option" data-x="${player.mouse.x}" data-y="${player.mouse.y}">
                 <span class="player-avatar" style="color: ${player.color}">${player.avatar}</span>
-                <span class="player-name">${player.username}</span>
-                <span class="player-coords">(${player.position.x}, ${player.position.y})</span>
+                <span class="player-name">${player.name}</span>
+                <span class="player-coords">(${player.mouse.x}, ${player.mouse.y})</span>
             </div>
         `).join('');
     },
@@ -96,18 +88,9 @@ const SpawnScreen = {
     // Validate and clamp coordinates to grid bounds
     validateCoordinates: function (x, y) {
         const gridInfo = GameState.connection.getGridInfo();
-        if (!gridInfo) {
-            throw new Error("Grid information not available");
-        }
-
-        const gridWidth = gridInfo.width;
-        const gridHeight = gridInfo.height;
-        const gridCenterX = Math.floor(gridWidth / 2);
-        const gridCenterY = Math.floor(gridHeight / 2);
-
         return {
-            x: Math.max(-gridCenterX, Math.min(gridCenterX, x)),
-            y: Math.max(-gridCenterY, Math.min(gridCenterY, y))
+            x: Math.max(0, Math.min(gridInfo.width, x)),
+            y: Math.max(0, Math.min(gridInfo.height, y))
         };
     },
 
@@ -118,7 +101,8 @@ const SpawnScreen = {
 
             // Send initial view centered on spawn position
             const viewSize = 20; // View radius. TODO: Configure based on zoom/resolution.
-            GameState.connection.sendView(x - viewSize, y - viewSize, x + viewSize, y + viewSize, true);
+            GameState.connection.sendView(
+                validPos.x - viewSize, validPos.y - viewSize, validPos.x + viewSize, validPos.y + viewSize, true);
 
             await App.showScreen(App.screens.PLAY);
         } catch (error) {
@@ -138,15 +122,8 @@ const SpawnScreen = {
         if (randomSpawnBtn) {
             randomSpawnBtn.addEventListener('click', () => {
                 const gridInfo = GameState.connection.getGridInfo();
-                if (!gridInfo) {
-                    alert('Grid information not available. Please try again.');
-                    return;
-                }
-
-                const gridCenterX = Math.floor(gridInfo.width / 2);
-                const gridCenterY = Math.floor(gridInfo.height / 2);
-                const x = Math.floor(Math.random() * gridInfo.width) - gridCenterX;
-                const y = Math.floor(Math.random() * gridInfo.height) - gridCenterY;
+                const x = Math.floor(Math.random() * gridInfo.width);
+                const y = Math.floor(Math.random() * gridInfo.height);
                 this.setSpawnLocation(x, y);
             });
         }

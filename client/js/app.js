@@ -73,13 +73,6 @@ const App = {
             // Handle logout
             if (e.target.closest('.logout-button')) {
                 GameState.disconnect();
-                GameState.currentUser = {
-                    username: null,
-                    avatar: null,
-                    color: null,
-                    x: null,
-                    y: null
-                };
                 // Try to reconnect after logout
                 this.init();
             }

@@ -9,7 +9,6 @@ class GameConnection {
         this.onUpdate = (state, x, y, userId) => {
             PlayScreen.processServerUpdate({ x, y, state, userId });
         };
-        this.onGridInfo = (width, height, userId) => { };
         this.onError = (error) => { };
     }
 
@@ -30,8 +29,7 @@ class GameConnection {
                         switch (command) {
                             case 'grid': {
                                 const [width, height] = args.map(Number);
-                                this.gridInfo = { width, height };  // Store grid info
-                                this.onGridInfo(width, height);
+                                this.gridInfo = { width, height };
                                 break;
                             }
                             case 'update': {
