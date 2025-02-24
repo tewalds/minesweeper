@@ -284,6 +284,9 @@ int main(int argc, char **argv) {
                 iss >> color >> emoji;
                 users[userid].color = color;
                 users[userid].emoji = emoji;
+                if (auto s = ctx.ws_session.lock(); s) {
+                  send_user(s, users[userid]);
+                }
               } else {
                 std::cout << "Invalid command: " << str << "\n";
                 return;
