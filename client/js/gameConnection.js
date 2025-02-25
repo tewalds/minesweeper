@@ -6,9 +6,6 @@ class GameConnection {
         this.registrationPromise = null;  // Track registration completion
         this.loginPromise = null;  // Track login completion
         this.gridInfo = null;  // Store grid info
-        this.onUpdate = (state, x, y, userId) => {
-            PlayScreen.processServerUpdate({ x, y, state, userId });
-        };
         this.onError = (error) => { };
     }
 
@@ -34,7 +31,7 @@ class GameConnection {
                             }
                             case 'update': {
                                 const [state, x, y, userId] = args.map(Number);
-                                this.onUpdate(state, x, y, userId);
+                                PlayScreen.processUpdate(state, x, y,userId);
                                 break;
                             }
                             case 'user': {

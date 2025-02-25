@@ -77,17 +77,12 @@ const PlayScreen = {
             }
         } else if (state === 11) { // MARKED
             this.revealed.delete(key);
-            // Only set marker if we have a userId
-            if (userId !== undefined) {
-                this.markers.set(key, { userId });
-                const cell = this.visibleCells.get(key);
-                if (cell) {
-                    cell.className = 'grid-cell';
-                    // Update visual state immediately
-                    this.updateCellMarker(cell, key);
-                }
-            } else {
-                console.warn('Received MARKED state without userId:', { x, y, state });
+            this.markers.set(key, { userId });
+            const cell = this.visibleCells.get(key);
+            if (cell) {
+                cell.className = 'grid-cell';
+                // Update visual state immediately
+                this.updateCellMarker(cell, key);
             }
         }
     },
@@ -1143,18 +1138,16 @@ const PlayScreen = {
         }
     },
 
-    // Process server updates
-    processServerUpdate: function (update) {
-        if (!update) return;
-
+    processUpdate: function (state, x, y, userId) {
         // Store the state before updating
-        const oldState = this.revealed.has(update.x + ',' + update.y);
+        key = x + ',' + y;
+        const oldState = this.revealed.has(key);
 
         // Update the cell - now passing userId
-        this.updateCell(update.x, update.y, update.state, update.userId);
+        this.updateCell(x, y, state, userId);
 
         // Force a visual update only if state changed
-        if (oldState !== this.revealed.has(update.x + ',' + update.y)) {
+        if (oldState !== this.revealed.has(key)) {
             const grid = document.querySelector('.game-grid');
             const container = document.querySelector('.game-container');
             if (grid && container) {
