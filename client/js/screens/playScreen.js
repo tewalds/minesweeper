@@ -160,105 +160,6 @@ const PlayScreen = {
         }
     },
 
-    // Update movement state for all players
-    updatePlayerMovements: function (timestamp) {
-        if (!this.cachedPlayerData) return;
-
-        // Initialize movement state for new players
-        this.cachedPlayerData.forEach(player => {
-            if (!this.playerMovements.has(player.username)) {
-                this.initPlayerMovement(player);
-            }
-        });
-
-        // Update each player's movement
-        this.playerMovements.forEach((state, username) => {
-            if (username === GameState.currentUser().username) return;
-
-            if (state.isMoving) {
-                // Update current position based on progress
-                const progress = Math.min(1, (timestamp - state.startTime) / state.duration);
-                state.currentX = state.startX + (state.targetX - state.startX) * progress;
-                state.currentY = state.startY + (state.targetY - state.startY) * progress;
-
-                // Check if movement is complete
-                if (progress >= 1) {
-                    state.isMoving = false;
-                    state.currentX = state.targetX;
-                    state.currentY = state.targetY;
-                    state.idleUntil = timestamp + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME;
-
-                    // Always trigger click at end of movement
-                    const player = this.cachedPlayerData.find(p => p.username === username);
-                    if (player) {
-                        const cellX = Math.round(state.currentX);
-                        const cellY = Math.round(state.currentY);
-                        this.simulatePlayerClick(cellX, cellY, username, player.avatar).catch(error => {
-                            console.warn(`Click failed for ${username}:`, error);
-                        });
-                    }
-                }
-            } else if (timestamp >= state.idleUntil) {
-                // Get next move from AI
-                const nextMove = MinesweeperAI.getNextMove(username);
-
-                if (nextMove) {
-                    if (nextMove.action === 'move') {
-                        // Just move to new area without clicking
-                        state.isMoving = true;
-                        state.startX = state.currentX;
-                        state.startY = state.currentY;
-                        state.targetX = nextMove.x;
-                        state.targetY = nextMove.y;
-                        state.startTime = timestamp;
-
-                        // Calculate duration based on distance
-                        const distance = Math.hypot(state.targetX - state.startX, state.targetY - state.startY);
-                        const progress = Math.min(1, distance / this.MAX_MOVE_DISTANCE);
-                        state.duration = this.MIN_MOVE_DURATION + progress * (this.MAX_MOVE_DURATION - this.MIN_MOVE_DURATION);
-                    } else {
-                        // Move to target cell for action
-                        state.isMoving = true;
-                        state.startX = state.currentX;
-                        state.startY = state.currentY;
-                        state.targetX = nextMove.x;
-                        state.targetY = nextMove.y;
-                        state.startTime = timestamp;
-
-                        // Calculate duration based on distance
-                        const distance = Math.hypot(state.targetX - state.startX, state.targetY - state.startY);
-                        const progress = Math.min(1, distance / this.MAX_MOVE_DISTANCE);
-                        state.duration = this.MIN_MOVE_DURATION + progress * (this.MAX_MOVE_DURATION - this.MIN_MOVE_DURATION);
-                    }
-                } else {
-                    // No move available, just wait longer
-                    state.idleUntil = timestamp + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME;
-                }
-            }
-        });
-    },
-
-    // Start movement updates
-    startMovementUpdates: function () {
-        const updateMovements = (timestamp) => {
-            // Check if enough time has passed since last update
-            if (timestamp - this.lastMovementUpdate >= this.MOVEMENT_UPDATE_INTERVAL) {
-                this.lastMovementUpdate = timestamp;
-                this.updatePlayerMovements(timestamp);
-            }
-            this.movementUpdateInterval = requestAnimationFrame(updateMovements);
-        };
-        this.movementUpdateInterval = requestAnimationFrame(updateMovements);
-    },
-
-    // Stop movement updates
-    stopMovementUpdates: function () {
-        if (this.movementUpdateInterval) {
-            cancelAnimationFrame(this.movementUpdateInterval);
-            this.movementUpdateInterval = null;
-        }
-    },
-
     updateInterval: null,
     markerUpdateFrame: null,
     lastMarkerUpdate: 0,
@@ -401,7 +302,6 @@ const PlayScreen = {
         // Start update loops
         this.startUpdates();
         this.startMarkerUpdates();
-        this.startMovementUpdates();
         console.log('PlayScreen - Update loops started');
     },
 
@@ -444,11 +344,6 @@ const PlayScreen = {
             this.updateVisibleCells(container, grid);
             console.log('Initial visible cells updated');
         }
-    },
-
-    createGrid: function () {
-        // No longer need to create all cells upfront
-        return '';
     },
 
     getPlayerDirection: function (playerX, playerY) {
@@ -1070,7 +965,6 @@ const PlayScreen = {
             cancelAnimationFrame(this.markerUpdateFrame);
             this.markerUpdateFrame = null;
         }
-        this.stopMovementUpdates();
     },
 
     // Calculate zoom speed based on current zoom level
