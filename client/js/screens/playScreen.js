@@ -129,37 +129,6 @@ const PlayScreen = {
         this.playerMovements.set(player.username, state);
     },
 
-    // Simulate a player click at a position
-    simulatePlayerClick: async function (x, y, username, avatar) {
-        try {
-            const key = `${x},${y}`;
-            const marker = this.markers.get(`${x},${y}`);
-
-            // Find userId from username
-            let userId = null;
-            for (const [id, userData] of GameState.players.entries()) {
-                if (userData.name === username) {
-                    userId = id;
-                    break;
-                }
-            }
-
-            if (marker?.userId === userId) {
-                // Remove own flag
-                await GameState.connection.unmarkCell(x, y);
-            } else if (!marker) {
-                // Only reveal if cell isn't flagged
-                if (!this.revealed.has(`${x},${y}`)) {
-                    await GameState.connection.openCell(x, y);
-                }
-            }
-        } catch (error) {
-            console.warn(`Click failed for ${username}:`, error);
-            // On error, force a full state refresh
-            this.updateVisibleCellStates();
-        }
-    },
-
     updateInterval: null,
     markerUpdateFrame: null,
     lastMarkerUpdate: 0,
