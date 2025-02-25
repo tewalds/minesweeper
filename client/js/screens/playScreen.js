@@ -831,9 +831,9 @@ const PlayScreen = {
             }
 
             // Handle zoom keys
-            if ((key === '=' || key === '+' || key === '-' || key === '_') && this.activeZoom === null) {
+            if ('=+-_'.includes(key) && this.activeZoom === null) {
                 e.preventDefault(); // Prevent browser zoom
-                this.activeZoom = (key === '=' || key === '+') ? 1 : -1;
+                this.activeZoom = '=+'.includes(key) ? 1 : -1;
                 this.zoomAnimationFrame = requestAnimationFrame(updateZoom);
             }
         });
@@ -849,8 +849,7 @@ const PlayScreen = {
             }
 
             // Handle zoom keys
-            if ((key === '=' || key === '+' || key === '-' || key === '_') &&
-                ((key === '=' || key === '+') ? 1 : -1) === this.activeZoom) {
+            if ('=+-_'.includes(key) && ('=+'.includes(key) ? 1 : -1) === this.activeZoom) {
                 this.activeZoom = null;
                 if (this.zoomAnimationFrame) {
                     cancelAnimationFrame(this.zoomAnimationFrame);
