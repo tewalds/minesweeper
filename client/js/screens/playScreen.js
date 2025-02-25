@@ -49,7 +49,7 @@ const PlayScreen = {
             this.markers.delete(key); // Remove any flags
             const cell = this.visibleCells.get(key);
             if (cell) {
-                cell.className = 'grid-cell revealed';
+                cell.classList.add('revealed');
                 if (state === 0) {
                     cell.classList.add('empty');
                     cell.textContent = '';
@@ -63,7 +63,7 @@ const PlayScreen = {
             this.markers.delete(key);
             const cell = this.visibleCells.get(key);
             if (cell) {
-                cell.className = 'grid-cell revealed mine';
+                cell.classList.add('revealed', 'mine');
                 cell.textContent = '💣';
             }
         } else if (state === 10) { // HIDDEN
@@ -71,7 +71,6 @@ const PlayScreen = {
             this.markers.delete(key);
             const cell = this.visibleCells.get(key);
             if (cell) {
-                cell.className = 'grid-cell';
                 cell.textContent = '';
                 cell.style.color = ''; // Clear any color
             }
@@ -80,7 +79,6 @@ const PlayScreen = {
             this.markers.set(key, userId);
             const cell = this.visibleCells.get(key);
             if (cell) {
-                cell.className = 'grid-cell';
                 // Update visual state immediately
                 this.updateCellMarker(cell, key);
             }
