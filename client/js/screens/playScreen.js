@@ -8,7 +8,7 @@ const PlayScreen = {
     BASE_ZOOM_SPEED: 0.1, // Base speed for zooming
     EDGE_SCROLL_THRESHOLD: 20, // Pixels from edge to trigger scrolling
     EDGE_SCROLL_SPEED: 750, // Pixels per second for edge scrolling
-    RENDER_MARGIN: 2, // Extra cells to render beyond viewport
+    RENDER_MARGIN: 5, // Extra cells to render beyond viewport
     CELL_POOL_SIZE: 2500, // Pool of reusable cells (50x50 visible area)
 
     // Cursor offset for indicators and arrows (at 100% zoom)
