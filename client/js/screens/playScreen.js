@@ -90,7 +90,6 @@ const PlayScreen = {
     updateInterval: null,
     markerUpdateFrame: null,
     lastMarkerUpdate: 0,
-    cachedPlayerData: null, // Cache for player data between updates
     isDragging: false,
     lastX: 0,
     lastY: 0,
@@ -188,7 +187,7 @@ const PlayScreen = {
                 <div class="player-info-container">
                     <div class="player-info">
                         <span style="color: ${GameState.currentUser().color}">${GameState.currentUser().avatar}</span>
-                        <span>${GameState.currentUser().username}</span>
+                        <span>${GameState.currentUser().name}</span>
                         <span class="player-score">Score: ${GameState.currentUser().score}</span>
                     </div>
                     <div class="settings-menu">
@@ -1068,7 +1067,7 @@ const PlayScreen = {
                     <div class="cursor-info">
                         <span class="cursor-avatar">${playerData.avatar}</span>
                         <span class="cursor-name">${playerData.name}</span>
-                        <span class="cursor-score">${playerData.score || 0}</span>
+                        <span class="cursor-score">${playerData.score}</span>
                     </div>
                 `;
 
@@ -1090,7 +1089,7 @@ const PlayScreen = {
                     <span class="indicator-arrow">${arrow}</span>
                     <span class="indicator-avatar">${playerData.avatar}</span>
                     <span class="indicator-name">${playerData.name}</span>
-                    <span class="indicator-score">${playerData.score || 0}</span>
+                    <span class="indicator-score">${playerData.score}</span>
                 `;
 
                 indicatorsContainer.appendChild(indicator);
