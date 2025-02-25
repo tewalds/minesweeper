@@ -996,7 +996,7 @@ const PlayScreen = {
         };
 
         // Only send view update if it changed
-        if (bounds !== this.bounds) {
+        if (!deepEqual(bounds, this.currentView)) {
             this.currentView = bounds;
             GameState.connection.sendView(bounds.left, bounds.top, bounds.right, bounds.bottom, false);
         }
