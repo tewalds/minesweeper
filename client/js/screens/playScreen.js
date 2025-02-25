@@ -995,7 +995,6 @@ const PlayScreen = {
 
         const cellsToRemove = new Set(this.visibleCells.keys());
         const fragment = document.createDocumentFragment();
-        let updatesNeeded = false;
 
         // Update or create visible cells
         for (let y = bounds.top; y < bounds.bottom; y++) {
@@ -1010,7 +1009,6 @@ const PlayScreen = {
                     const cell = this.createCell(x, y);
                     fragment.appendChild(cell);
                     this.visibleCells.set(key, cell);
-                    updatesNeeded = true;
                 }
             }
         }
@@ -1020,7 +1018,6 @@ const PlayScreen = {
             const cell = this.visibleCells.get(key);
             this.recycleCellElement(cell);
             this.visibleCells.delete(key);
-            updatesNeeded = true;
         }
 
         // Batch DOM updates
