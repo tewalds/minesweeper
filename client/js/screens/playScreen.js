@@ -88,7 +88,7 @@ const PlayScreen = {
     },
 
     updateInterval: null,
-    markerUpdateFrame: null,
+    cursorUpdateFrame: null,
     lastMarkerUpdate: 0,
     isDragging: false,
     lastX: 0,
@@ -227,7 +227,7 @@ const PlayScreen = {
 
         // Start update loops
         this.startUpdates();
-        this.startMarkerUpdates();
+        this.startCursorUpdates();
         console.log('PlayScreen - Update loops started');
     },
 
@@ -860,19 +860,19 @@ const PlayScreen = {
         });
     },
 
-    startMarkerUpdates: function () {
-        const updateMarkers = async (timestamp) => {
+    startCursorUpdates: function () {
+        const updateCursors = async (timestamp) => {
             // Check if enough time has passed since last update
             if (timestamp - this.lastMarkerUpdate >= this.MARKER_UPDATE_INTERVAL) {
                 this.lastMarkerUpdate = timestamp;
                 // Use GameState.players directly instead of cached data
-                await this.renderPlayerMarkers();
+                await this.renderPlayerCursors();
             }
 
-            this.markerUpdateFrame = requestAnimationFrame(updateMarkers);
+            this.cursorUpdateFrame = requestAnimationFrame(updateCursors);
         };
 
-        this.markerUpdateFrame = requestAnimationFrame(updateMarkers);
+        this.cursorUpdateFrame = requestAnimationFrame(updateCursors);
     },
 
     startUpdates: function () {
@@ -887,9 +887,9 @@ const PlayScreen = {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
         }
-        if (this.markerUpdateFrame) {
-            cancelAnimationFrame(this.markerUpdateFrame);
-            this.markerUpdateFrame = null;
+        if (this.cursorUpdateFrame) {
+            cancelAnimationFrame(this.cursorUpdateFrame);
+            this.cursorUpdateFrame = null;
         }
     },
 
@@ -1019,7 +1019,7 @@ const PlayScreen = {
     },
 
     // New method specifically for rendering markers
-    renderPlayerMarkers: async function () {
+    renderPlayerCursors: async function () {
         const indicatorsContainer = document.querySelector('.player-indicators');
         const cursorsContainer = document.querySelector('.player-cursors');
         const container = document.querySelector('.game-container');
