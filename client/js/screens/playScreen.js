@@ -982,10 +982,10 @@ const PlayScreen = {
         const scale = 1 / this.zoom;
 
         // Convert screen coordinates to grid coordinates
-        let left = Math.floor((-this.offsetX * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
-        let top = Math.floor((-this.offsetY * scale) / this.CELL_SIZE) - this.RENDER_MARGIN;
-        let right = Math.ceil((rect.width * scale - this.offsetX * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
-        let bottom = Math.ceil((rect.height * scale - this.offsetY * scale) / this.CELL_SIZE) + this.RENDER_MARGIN;
+        let left = Math.floor(-this.offsetX * scale / this.CELL_SIZE) - this.RENDER_MARGIN;
+        let top = Math.floor(-this.offsetY * scale / this.CELL_SIZE) - this.RENDER_MARGIN;
+        let right = Math.ceil((rect.width - this.offsetX) * scale / this.CELL_SIZE) + this.RENDER_MARGIN;
+        let bottom = Math.ceil((rect.height - this.offsetY) * scale / this.CELL_SIZE) + this.RENDER_MARGIN;
 
         // Clamp to grid boundaries
         const bounds = {
