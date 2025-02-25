@@ -15,20 +15,6 @@ const PlayScreen = {
     CURSOR_OFFSET_X: 20, // Half cell width
     CURSOR_OFFSET_Y: 30, // Half cell height
 
-    // Movement simulation constants
-    MOVEMENT_UPDATE_INTERVAL: 50, // Movement update interval (ms)
-    MIN_MOVE_DURATION: 300, // Minimum time to reach target (ms)
-    MAX_MOVE_DURATION: 800, // Maximum time to reach target (ms)
-    MIN_IDLE_TIME: 800, // Minimum time to stay idle (ms)
-    MAX_IDLE_TIME: 2500, // Maximum time to stay idle (ms)
-    MIN_MOVE_DISTANCE: 1, // Minimum cells to move
-    MAX_MOVE_DISTANCE: 3, // Maximum cells to move
-
-    // Track movement state for each player
-    playerMovements: new Map(), // Map of username -> movement state
-    movementUpdateInterval: null,
-    lastMovementUpdate: 0,
-
     // Track the current view for efficient updates
     currentView: null,
 
@@ -99,27 +85,6 @@ const PlayScreen = {
         if (scoreElement) {
             scoreElement.textContent = `Score: ${GameState.currentUser().score}`;
         }
-    },
-
-    // Initialize movement state for a player
-    initPlayerMovement: function (player) {
-        if (player.username === GameState.currentUser().username) return;
-
-        const state = {
-            currentX: player.position.x,
-            currentY: player.position.y,
-            targetX: player.position.x,
-            targetY: player.position.y,
-            startX: player.position.x,
-            startY: player.position.y,
-            startTime: performance.now(),
-            duration: 0,
-            isMoving: false,
-            hasClickedThisPhase: false,
-            idleUntil: performance.now() + Math.random() * (this.MAX_IDLE_TIME - this.MIN_IDLE_TIME) + this.MIN_IDLE_TIME
-        };
-
-        this.playerMovements.set(player.username, state);
     },
 
     updateInterval: null,
