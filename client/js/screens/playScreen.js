@@ -37,8 +37,8 @@ const PlayScreen = {
     gridHeight: 0,
 
     // Track revealed cells and markers
-    revealed: new Set(),
-    markers: new Map(),
+    revealed: new Set(),  // "x,y"
+    markers: new Map(),  // "x,y" -> userId
 
     // Update cell state
     updateCell: function (x, y, state, userId) {
@@ -77,7 +77,7 @@ const PlayScreen = {
             }
         } else if (state === 11) { // MARKED
             this.revealed.delete(key);
-            this.markers.set(key, { userId });
+            this.markers.set(key, userId);
             const cell = this.visibleCells.get(key);
             if (cell) {
                 cell.className = 'grid-cell';
@@ -1168,7 +1168,7 @@ const PlayScreen = {
         }
 
         // Find player data for this marker
-        const playerData = GameState.players.get(marker.userId);
+        const playerData = GameState.players.get(marker);
         if (!playerData) {
             // If we don't have player data, clear the marker
             this.markers.delete(key);
