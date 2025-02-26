@@ -90,8 +90,7 @@ const PlayScreen = {
     cursorUpdateFrame: null,
     lastMarkerUpdate: 0,
     isDragging: false,
-    lastX: 0,
-    lastY: 0,
+    lastMousePos: new Point(0, 0),
     offsetX: 0,
     offsetY: 0,
     zoom: 1,
@@ -272,7 +271,7 @@ const PlayScreen = {
         if (!container) return 0;
 
         // Get current viewport center in grid coordinates
-        const rect = container.getBoundingClientRect();
+        const rect = Rect.fromRect(container.getBoundingClientRect());
         const viewportCenterX = (-this.offsetX / this.zoom + rect.width / (2 * this.zoom)) / this.CELL_SIZE;
         const viewportCenterY = (-this.offsetY / this.zoom + rect.height / (2 * this.zoom)) / this.CELL_SIZE;
 
@@ -308,7 +307,7 @@ const PlayScreen = {
     calculatePlayerScreenPosition: function (x, y, container) {
         if (!container) return null;
 
-        const rect = container.getBoundingClientRect();
+        const rect = Rect.fromRect(container.getBoundingClientRect());
         const gridCenterX = Math.floor(this.gridInfo.width / 2);
         const gridCenterY = Math.floor(this.gridInfo.height / 2);
         const absX = x + gridCenterX;
@@ -469,9 +468,7 @@ const PlayScreen = {
         });
 
         // Initialize mouse position to center of container to prevent immediate scrolling
-        const rect = container.getBoundingClientRect();
-        this.lastX = rect.left + rect.width / 2;
-        this.lastY = rect.top + rect.height / 2;
+        this.lastMousePos = Rect.fromRect(container.getBoundingClientRect()).center;
         this.isMouseInWindow = true;
 
         // Update edge scrolling to be framerate independent
@@ -497,33 +494,27 @@ const PlayScreen = {
                 return;
             }
 
-            const rect = container.getBoundingClientRect();
-            const mouseX = this.lastX - rect.left;
-            const mouseY = this.lastY - rect.top;
+            const rect = Rect.fromRect(container.getBoundingClientRect());
+            const mouse = this.lastMousePos.sub(rect.tl);
 
             let moved = false;
             const speed = this.EDGE_SCROLL_SPEED * deltaTime * this.zoom; // Multiply by zoom to make it zoom independent
 
-            // Check if mouse is within vertical bounds
-            const isInVerticalBounds = mouseY >= 0 && mouseY <= rect.height;
-            // Check if mouse is within horizontal bounds
-            const isInHorizontalBounds = mouseX >= 0 && mouseX <= rect.width;
-
-            if (isInVerticalBounds) {
-                if (mouseX < this.EDGE_SCROLL_THRESHOLD && mouseX >= 0) {
+            if (mouse.y >= 0 && mouse.y <= rect.height) {
+                if (mouse.x < this.EDGE_SCROLL_THRESHOLD && mouse.x >= 0) {
                     this.offsetX += speed;
                     moved = true;
-                } else if (mouseX > rect.width - this.EDGE_SCROLL_THRESHOLD && mouseX <= rect.width) {
+                } else if (mouse.x > rect.width - this.EDGE_SCROLL_THRESHOLD && mouse.x <= rect.width) {
                     this.offsetX -= speed;
                     moved = true;
                 }
             }
 
-            if (isInHorizontalBounds) {
-                if (mouseY < this.EDGE_SCROLL_THRESHOLD && mouseY >= 0) {
+            if (mouse.x >= 0 && mouse.x <= rect.width) {
+                if (mouse.y < this.EDGE_SCROLL_THRESHOLD && mouse.y >= 0) {
                     this.offsetY += speed;
                     moved = true;
-                } else if (mouseY > rect.height - this.EDGE_SCROLL_THRESHOLD && mouseY <= rect.height) {
+                } else if (mouse.y > rect.height - this.EDGE_SCROLL_THRESHOLD && mouse.y <= rect.height) {
                     this.offsetY -= speed;
                     moved = true;
                 }
@@ -547,12 +538,6 @@ const PlayScreen = {
 
         window.addEventListener('mouseenter', () => {
             this.isMouseInWindow = true;
-        });
-
-        // Track mouse position globally
-        window.addEventListener('mousemove', (e) => {
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
         });
 
         // Cell click handling
@@ -631,7 +616,7 @@ const PlayScreen = {
 
                 if (newZoom !== this.zoom) {
                     // Get container center for zooming
-                    const rect = container.getBoundingClientRect();
+                    const rect = Rect.fromRect(container.getBoundingClientRect());
                     const centerX = rect.width / 2;
                     const centerY = rect.height / 2;
 
@@ -693,20 +678,16 @@ const PlayScreen = {
             if (e.button === 1) { // Middle mouse button only
                 e.preventDefault(); // Prevent default middle-click behavior
                 this.isDragging = true;
-                this.lastX = e.clientX;
-                this.lastY = e.clientY;
+                this.lastMousePos = new Point(e.clientX, e.clientY);
                 container.classList.add('grabbing');
             }
         });
 
         window.addEventListener('mousemove', (e) => {
             if (this.isDragging) {
-                const deltaX = e.clientX - this.lastX;
-                const deltaY = e.clientY - this.lastY;
-                this.offsetX += deltaX;
-                this.offsetY += deltaY;
-                this.lastX = e.clientX;
-                this.lastY = e.clientY;
+                this.offsetX += e.clientX - this.lastMousePos.x;
+                this.offsetY += e.clientY - this.lastMousePos.y;
+                this.lastMousePos = new Point(e.clientX, e.clientY);
 
                 // Clamp the offset values
                 this.clampOffset(container);
@@ -732,7 +713,7 @@ const PlayScreen = {
 
             if (newZoom !== this.zoom) {
                 // Get container dimensions
-                const rect = container.getBoundingClientRect();
+                const rect = Rect.fromRect(container.getBoundingClientRect());
 
                 // Get mouse position relative to container
                 const mouseX = e.clientX - rect.left;
@@ -898,7 +879,7 @@ const PlayScreen = {
     getVisibleBounds: function (container) {
         if (!container) return null;
 
-        const rect = container.getBoundingClientRect();
+        const rect = Rect.fromRect(container.getBoundingClientRect());
         const scale = 1 / this.zoom;
 
         // Convert screen coordinates to grid coordinates

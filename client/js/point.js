@@ -35,9 +35,15 @@ class Rect {
     this.tl = tl;
     this.br = br;
   }
-  static from_center_size(center, size) {
+  static fromXYWH(x, y, width, height) {
+    return new Rect(new Point(x, y), new Point(x + width, y + height));
+  }
+  static fromCenterSize(center, size) {
     return new Rect(new Point(center.x - size.x / 2, center.y - size.y / 2), 
                     new Point(center.x + size.x / 2, center.y + size.y / 2));
+  }
+  static fromRect(rect) {  // Useful for DOMRect.
+    return Rect.fromXYWH(rect.x, rect.y, rect.width, rect.height);
   }
   static displayName = "Rect";
 
