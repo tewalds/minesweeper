@@ -19,8 +19,7 @@ const PlayScreen = {
     currentView: null,
 
     // Track grid dimensions
-    gridWidth: 0,
-    gridHeight: 0,
+    gridInfo: null,  // A Rect object.
 
     // Track revealed cells and markers
     revealed: new Set(),  // "x,y"
@@ -109,8 +108,8 @@ const PlayScreen = {
 
     // Calculate minimum zoom to ensure grid fills viewport
     calculateMinZoom: function (containerWidth, containerHeight) {
-        const gridWidth = this.gridWidth * this.CELL_SIZE;
-        const gridHeight = this.gridHeight * this.CELL_SIZE;
+        const gridWidth = this.gridInfo.width * this.CELL_SIZE;
+        const gridHeight = this.gridInfo.height * this.CELL_SIZE;
 
         // Calculate zoom needed to fill width and height
         const zoomWidth = containerWidth / gridWidth;
@@ -127,8 +126,8 @@ const PlayScreen = {
         const grid = document.querySelector('.game-grid');
         if (!container || !grid) return;
 
-        const gridCenterX = Math.floor(this.gridWidth / 2);
-        const gridCenterY = Math.floor(this.gridHeight / 2);
+        const gridCenterX = Math.floor(this.gridInfo.width / 2);
+        const gridCenterY = Math.floor(this.gridInfo.height / 2);
 
         // Calculate the position in screen coordinates
         const screenX = (x + gridCenterX) * this.CELL_SIZE;
@@ -147,8 +146,8 @@ const PlayScreen = {
     clampOffset: function (container) {
         if (!container) return;
 
-        const gridWidth = this.gridWidth * this.CELL_SIZE * this.zoom;
-        const gridHeight = this.gridHeight * this.CELL_SIZE * this.zoom;
+        const gridWidth = this.gridInfo.width * this.CELL_SIZE * this.zoom;
+        const gridHeight = this.gridInfo.height * this.CELL_SIZE * this.zoom;
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
 
@@ -171,16 +170,12 @@ const PlayScreen = {
         console.log('PlayScreen.show() - Starting initialization');
 
         // Get grid info from server
-        const gridInfo = GameState.connection.getGridInfo();
-        if (!gridInfo) {
+        this.gridInfo = GameState.connection.getGridInfo();
+        if (!this.gridInfo) {
             console.error('No grid info available');
             alert('Failed to get grid information. Please try again.');
             return;
         }
-
-        // Store grid dimensions
-        this.gridWidth = gridInfo.width;
-        this.gridHeight = gridInfo.height;
 
         const html = `
             <div class="play-screen">
@@ -250,10 +245,10 @@ const PlayScreen = {
         if (grid) {
             // Set up grid CSS properties
             grid.style.display = 'grid';
-            grid.style.width = `${this.gridWidth * this.CELL_SIZE}px`;
-            grid.style.height = `${this.gridHeight * this.CELL_SIZE}px`;
-            grid.style.gridTemplateColumns = `repeat(${this.gridWidth}, ${this.CELL_SIZE}px)`;
-            grid.style.gridTemplateRows = `repeat(${this.gridHeight}, ${this.CELL_SIZE}px)`;
+            grid.style.width = `${this.gridInfo.width * this.CELL_SIZE}px`;
+            grid.style.height = `${this.gridInfo.height * this.CELL_SIZE}px`;
+            grid.style.gridTemplateColumns = `repeat(${this.gridInfo.width}, ${this.CELL_SIZE}px)`;
+            grid.style.gridTemplateRows = `repeat(${this.gridInfo.height}, ${this.CELL_SIZE}px)`;
             grid.style.position = 'relative';
             grid.style.transformOrigin = 'top left';
             grid.style.setProperty('--cell-size', `${this.CELL_SIZE}px`);
@@ -298,8 +293,8 @@ const PlayScreen = {
         // Add a small margin to the bounds
         const margin = 2;
         // x and y are already relative to grid center, so we need to add center back
-        const gridCenterX = Math.floor(this.gridWidth / 2);
-        const gridCenterY = Math.floor(this.gridHeight / 2);
+        const gridCenterX = Math.floor(this.gridInfo.width / 2);
+        const gridCenterY = Math.floor(this.gridInfo.height / 2);
         const absX = x + gridCenterX;
         const absY = y + gridCenterY;
 
@@ -314,8 +309,8 @@ const PlayScreen = {
         if (!container) return null;
 
         const rect = container.getBoundingClientRect();
-        const gridCenterX = Math.floor(this.gridWidth / 2);
-        const gridCenterY = Math.floor(this.gridHeight / 2);
+        const gridCenterX = Math.floor(this.gridInfo.width / 2);
+        const gridCenterY = Math.floor(this.gridInfo.height / 2);
         const absX = x + gridCenterX;
         const absY = y + gridCenterY;
 
@@ -406,8 +401,8 @@ const PlayScreen = {
         const gameContainer = document.querySelector('.game-container');
         const grid = document.querySelector('.game-grid');
         if (gameContainer && grid) {
-            const gridWidth = this.gridWidth * this.CELL_SIZE;
-            const gridHeight = this.gridHeight * this.CELL_SIZE;
+            const gridWidth = this.gridInfo.width * this.CELL_SIZE;
+            const gridHeight = this.gridInfo.height * this.CELL_SIZE;
 
             // Update minimum zoom based on container size
             this.MIN_ZOOM = this.calculateMinZoom(gameContainer.clientWidth, gameContainer.clientHeight);
@@ -907,21 +902,18 @@ const PlayScreen = {
         const scale = 1 / this.zoom;
 
         // Convert screen coordinates to grid coordinates
-        let left = Math.floor(-this.offsetX * scale / this.CELL_SIZE) - this.RENDER_MARGIN;
-        let top = Math.floor(-this.offsetY * scale / this.CELL_SIZE) - this.RENDER_MARGIN;
-        let right = Math.ceil((rect.width - this.offsetX) * scale / this.CELL_SIZE) + this.RENDER_MARGIN;
-        let bottom = Math.ceil((rect.height - this.offsetY) * scale / this.CELL_SIZE) + this.RENDER_MARGIN;
+        let bounds = new Rect(
+            new Point(
+                Math.floor((rect.left - this.offsetX) * scale / this.CELL_SIZE) - this.RENDER_MARGIN,
+                Math.floor((rect.top - this.offsetY) * scale / this.CELL_SIZE) - this.RENDER_MARGIN),
+            new Point(
+                Math.ceil((rect.right - this.offsetX) * scale / this.CELL_SIZE) + this.RENDER_MARGIN,
+                Math.ceil((rect.bottom - this.offsetY) * scale / this.CELL_SIZE) + this.RENDER_MARGIN));
 
-        // Clamp to grid boundaries
-        const bounds = {
-            left: Math.max(0, left),
-            top: Math.max(0, top),
-            right: Math.min(this.gridWidth, right),
-            bottom: Math.min(this.gridHeight, bottom)
-        };
+        bounds = this.gridInfo.intersection(bounds);
 
         // Only send view update if it changed
-        if (!deepEqual(bounds, this.currentView)) {
+        if (!this.currentView || !Rect.equals(bounds, this.currentView)) {
             this.currentView = bounds;
             GameState.connection.sendView(bounds.left, bounds.top, bounds.right, bounds.bottom, false);
         }
@@ -963,7 +955,7 @@ const PlayScreen = {
         for (let y = bounds.top; y < bounds.bottom; y++) {
             for (let x = bounds.left; x < bounds.right; x++) {
                 // Skip if outside grid boundaries
-                if (x >= this.gridWidth || y >= this.gridHeight) continue;
+                if (x >= this.gridInfo.width || y >= this.gridInfo.height) continue;
 
                 const key = `${x},${y}`;
                 cellsToRemove.delete(key);
@@ -1034,8 +1026,8 @@ const PlayScreen = {
         cursorsContainer.innerHTML = '';
 
         // Calculate grid center offset
-        const gridCenterX = Math.floor(this.gridWidth / 2);
-        const gridCenterY = Math.floor(this.gridHeight / 2);
+        const gridCenterX = Math.floor(this.gridInfo.width / 2);
+        const gridCenterY = Math.floor(this.gridInfo.height / 2);
 
         // Process each player from GameState
         for (const [userId, playerData] of GameState.players.entries()) {

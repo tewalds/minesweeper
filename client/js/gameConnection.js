@@ -26,7 +26,7 @@ class GameConnection {
                         switch (command) {
                             case 'grid': {
                                 const [width, height] = args.map(Number);
-                                this.gridInfo = { width, height };
+                                this.gridInfo = new Rect(new Point(0, 0), new Point(width, height));
                                 break;
                             }
                             case 'update': {
@@ -45,10 +45,7 @@ class GameConnection {
                                     avatarIndex: parseInt(avatarIndex),
                                     avatar: GameState.avatars[parseInt(avatarIndex)] || GameState.defaultAvatar,
                                     score: parseInt(score),
-                                    mouse: {
-                                        x: parseInt(mouseX),
-                                        y: parseInt(mouseY),
-                                    },
+                                    mouse: new Point(parseInt(mouseX), parseInt(mouseY)),
                                     lastActive: Date.now() - 1000 * parseInt(active),
                                 };
                                 GameState.updatePlayer(userData);
@@ -86,7 +83,7 @@ class GameConnection {
                                 const [userId, x, y] = args.map(Number);
                                 // Update player mouse position
                                 if (GameState.players.has(userId)) {
-                                    GameState.players.get(userId).mouse = { x, y };
+                                    GameState.players.get(userId).mouse = new Point(x, y);
                                 }
                                 break;
                             }
