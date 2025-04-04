@@ -20,7 +20,12 @@ LDLIBS += $$(pkg-config absl_flat_hash_map --libs)
 LDLIBS += $$(pkg-config absl_random_random --libs)
 LDLIBS += $$(pkg-config absl_strings --libs)
 
-all: minesweeper minesweeper-server minesweeper-client minesweeper-agent test
+all: \
+		minesweeper \
+		minesweeper-agent \
+		minesweeper-client \
+		minesweeper-server \
+		test
 
 minesweeper: \
 		beauty/libeauty.a \
