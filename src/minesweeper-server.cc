@@ -22,7 +22,6 @@
 
 ABSL_FLAG(int, size, 1000, "Field size, squared.");
 ABSL_FLAG(float, mines, 0.16, "Mines percentage");
-ABSL_FLAG(float, window, 0.75, "window size");
 ABSL_FLAG(int, port, 9001, "Port to run the websocket server on.");
 ABSL_FLAG(int, seed, 0, "Random seed for the environment.");
 
@@ -129,7 +128,7 @@ int main(int argc, char **argv) {
 
   server.add_route("/minefield")
       .ws(beauty::ws_handler{
-          .on_connect = [&clients, &dims](const beauty::ws_context& ctx) { 
+          .on_connect = [&clients, &dims](const beauty::ws_context& ctx) {
             std::cout << "Connection opened" <<std::endl;
             clients[ctx.uuid] = ClientInfo{
               .session = ctx.ws_session,
@@ -149,7 +148,7 @@ int main(int argc, char **argv) {
             std::string command;
 
             iss >> command;
-            
+
             if (command == "ping") {
               // Useful for testing latency. Most messages are async events that may result in an arbitrary
               // number of responses, from none to millions, or not be a response at all. This one is
@@ -161,7 +160,7 @@ int main(int argc, char **argv) {
               }
               return;
             }
-            
+
             int userid = clients[ctx.uuid].userid;
             if (userid == 0) {
               if (command == "login") {
@@ -294,7 +293,7 @@ int main(int argc, char **argv) {
               }
             }
           },
-          .on_disconnect = [&clients](const beauty::ws_context& ctx) { 
+          .on_disconnect = [&clients](const beauty::ws_context& ctx) {
             std::cout << "Connection closed" << std::endl;
             clients.erase(ctx.uuid);
           },
