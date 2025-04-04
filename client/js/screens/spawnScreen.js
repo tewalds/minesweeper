@@ -85,26 +85,9 @@ const SpawnScreen = {
         `).join('');
     },
 
-    // Validate and clamp coordinates to grid bounds
-    validateCoordinates: function (x, y) {
-        const gridInfo = GameState.connection.getGridInfo();
-        return {
-            x: Math.max(0, Math.min(gridInfo.width, x)),
-            y: Math.max(0, Math.min(gridInfo.height, y))
-        };
-    },
-
-    setSpawnLocation: async function (x, y) {
+    setSpawnLocation: async function(point) {
         try {
-            // Validate and clamp coordinates
-            const validPos = this.validateCoordinates(x, y);
-
-            // Send initial view centered on spawn position
-            const viewSize = 20; // View radius. TODO: Configure based on zoom/resolution.
-            GameState.connection.sendView(
-                validPos.x - viewSize, validPos.y - viewSize, validPos.x + viewSize, validPos.y + viewSize, true);
-
-            await App.showScreen(App.screens.PLAY);
+            await App.showScreen(App.screens.PLAY, point);
         } catch (error) {
             console.error('Failed to set spawn location:', error);
             alert('Failed to set spawn location. Please try again.');
@@ -122,9 +105,9 @@ const SpawnScreen = {
         if (randomSpawnBtn) {
             randomSpawnBtn.addEventListener('click', () => {
                 const gridInfo = GameState.connection.getGridInfo();
-                const x = Math.floor(Math.random() * gridInfo.width);
-                const y = Math.floor(Math.random() * gridInfo.height);
-                this.setSpawnLocation(x, y);
+                const x = gridInfo.left + Math.floor(Math.random() * gridInfo.width);
+                const y = gridInfo.top + Math.floor(Math.random() * gridInfo.height);
+                this.setSpawnLocation(new Point(x, y));
             });
         }
 
@@ -132,17 +115,13 @@ const SpawnScreen = {
         const customSpawnBtn = document.querySelector('.spawn-button[data-spawn="custom"]');
         if (customSpawnBtn) {
             customSpawnBtn.addEventListener('click', () => {
-                const xInput = document.getElementById('spawn-x');
-                const yInput = document.getElementById('spawn-y');
-                const x = parseInt(xInput.value);
-                const y = parseInt(yInput.value);
-
+                const x = parseInt(document.getElementById('spawn-x').value);
+                const y = parseInt(document.getElementById('spawn-y').value);
                 if (isNaN(x) || isNaN(y)) {
                     alert('Please enter valid X and Y coordinates');
                     return;
                 }
-
-                this.setSpawnLocation(x, y);
+                this.setSpawnLocation(new Point(x, y));
             });
         }
 
@@ -152,10 +131,9 @@ const SpawnScreen = {
             playerList.addEventListener('click', async (e) => {
                 const playerOption = e.target.closest('.player-option');
                 if (!playerOption) return;
-
-                const targetX = parseInt(playerOption.dataset.x);
-                const targetY = parseInt(playerOption.dataset.y);
-                this.setSpawnLocation(targetX, targetY);
+                const x = parseInt(playerOption.dataset.x);
+                const y = parseInt(playerOption.dataset.y);
+                this.setSpawnLocation(new Point(x, y));
             });
         }
     }

@@ -165,7 +165,7 @@ const PlayScreen = {
         }
     },
 
-    show: async function (container) {
+    show: async function (container, point) {
         console.log('PlayScreen.show() - Starting initialization');
 
         // Get grid info from server
@@ -213,6 +213,7 @@ const PlayScreen = {
         });
 
         // Initialize game grid
+        this.centerOnPosition(point.x, point.y);
         await this.initializeGrid();
         console.log('PlayScreen - Grid initialized');
 
@@ -254,9 +255,6 @@ const PlayScreen = {
             console.log('Grid container initialized with cell size:', this.CELL_SIZE);
         }
 
-        // Center the grid initially
-        this.centerGrid();
-        console.log('Grid centered');
 
         // Initialize visible cells
         const container = document.querySelector('.game-container');
@@ -646,6 +644,7 @@ const PlayScreen = {
 
         // Update minimum zoom on window resize
         window.addEventListener('resize', () => {
+            // TODO: clampOffset
             this.centerGrid();
         });
 

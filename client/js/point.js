@@ -4,13 +4,9 @@ class Point {
     this.x = x;
     this.y = y;
   }
+  static fromPoint(p) { return new Point(p.x, p.y); }
   static displayName = "Point";
-  static distance(a, b) {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-
-    return Math.hypot(dx, dy);
-  }
+  static distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
   static equals(a, b) { return a.x === b.x && a.y === b.y; }
   mul(v) { return new Point(this.x * v, this.y * v); }
   div(v) { return new Point(this.x / v, this.y / v); }
@@ -44,6 +40,9 @@ class Rect {
   }
   static fromRect(rect) {  // Useful for DOMRect.
     return Rect.fromXYWH(rect.x, rect.y, rect.width, rect.height);
+  }
+  static fromElement(el) {
+    return Rect.fromXYWH(el.clientLeft, el.clientTop, el.clientWidth, el.clientHeight);
   }
   static displayName = "Rect";
 

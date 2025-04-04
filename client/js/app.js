@@ -29,7 +29,7 @@ const App = {
         }
     },
 
-    showScreen: async function (screenName) {
+    showScreen: async function (screenName, ...args) {
         this.currentScreen = screenName;
         const appDiv = document.getElementById('app');
         const screenContent = appDiv.querySelector('.screen-content') || appDiv.appendChild(document.createElement('div'));
@@ -38,16 +38,16 @@ const App = {
 
         switch (screenName) {
             case this.screens.LOGIN:
-                await LoginScreen.show(screenContent);
+                await LoginScreen.show(screenContent, ...args);
                 break;
             case this.screens.CUSTOMIZE:
-                await CustomizeScreen.show(screenContent);
+                await CustomizeScreen.show(screenContent, ...args);
                 break;
             case this.screens.SPAWN:
-                await SpawnScreen.show(screenContent);
+                await SpawnScreen.show(screenContent, ...args);
                 break;
             case this.screens.PLAY:
-                await PlayScreen.show(screenContent);
+                await PlayScreen.show(screenContent, ...args);
                 break;
         }
     },
